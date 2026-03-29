@@ -32,7 +32,7 @@ PREFERRED="100/160"         # Preferred 160MHz chanspec (may be overridden by NV
 DISABLE_FALLBACK=0          # 1: never switch to opposite 160MHz block once PREFERRED is chosen
 STRICT_STICKY=0             # 0: jump to PREFERRED only if current channel is outside block
                             # 1: jump to PREFERRED if not on exact chanspec, even within block
-MANAGE_CRON=1               # 1=auto add/remove cron and init‑start entries; 0=manual
+MANAGE_CRON=1               # Set to 1/0 to add/remove cron and init-start entries
 VERBOSE=2                   # 0=silent, 1=basic logs, 2=verbose (includes DFS status)
 LOG_ROTATE_RAM=1            # 1=RAM‑only log rotation, 0=use temp file on disk
 LOG_LINES=200

@@ -9,7 +9,7 @@ IFACE=""                    # 5GHz interface - leave empty for auto-detection, o
 COOLDOWN=60                 # Minimum seconds between recovery attempts
 CAC_WAIT=61                 # Seconds to wait for CAC to complete - set slightly above 61 to ensure completion
 PREFERRED="100/160"         # Preferred 160MHz target (may be overridden by NVRAM if wl1_chanspec != 0)
-DISABLE_FALLBACK=1          # 1=always stay in PREFERRED block, never try the other 160MHz block
+DISABLE_FALLBACK=0          # 1=always stay in PREFERRED block, never try the other 160MHz block
 STRICT_STICKY=0             # 0=jump to PREFERRED only if current channel is outside preferred block range (default)
                             # 1=jump to PREFERRED if not on the exact PREFERRED chanspec, even within the same block
                             # Note: automatically set to 1 when NVRAM wl1_chanspec overrides PREFERRED

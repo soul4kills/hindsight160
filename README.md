@@ -29,7 +29,7 @@ IFACE=""                    # 5GHz interface; leave empty for auto‑detect or s
 COOLDOWN=60                 # Minimum seconds between recovery attempts
 CAC_WAIT=61                 # Wait time for CAC to finish (slightly above 61s)
 PREFERRED="100/160"         # Preferred 160MHz chanspec (may be overridden by NVRAM)
-DISABLE_FALLBACK=1          # 1: never switch to opposite 160MHz block once PREFERRED is chosen
+DISABLE_FALLBACK=0          # 1: never switch to opposite 160MHz block once PREFERRED is chosen
 STRICT_STICKY=0             # 0: jump to PREFERRED only if current channel is outside block
                             # 1: jump to PREFERRED if not on exact chanspec, even within block
 MANAGE_CRON=1               # 1=auto add/remove cron and init‑start entries; 0=manual

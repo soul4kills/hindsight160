@@ -122,33 +122,6 @@ When `MANAGE_CRON=1` the script manages itself:
 
 ---
 
-## CAC polling explained
-
-The old approach used a fixed `CAC_WAIT=61` second sleep before checking the result. This worked for standard DFS channels (60‑second CAC) but would incorrectly report failure on weather radar channels (120, 124, 128) which require up to 600 seconds CAC in most regulatory regions.
-
-The new polling approach:
-- Waits 5 seconds for the driver to transition state after the move is accepted
-- Polls every `CAC_POLL` seconds (default 61)
-- Watches for `move status=-1` in the `dfs_ap_move` output — the only reliable signal that CAC has completed
-- Gives up after `CAC_TIMEOUT` seconds (default 660) covering the maximum possible CAC duration globally
-
-The `move status` values seen during polling:
-
-| Value | Meaning |
-|-------|---------|
-| `-1` | IDLE — CAC complete or no operation in progress |
-| `0` | Move requested, not yet started |
-| `1` | BGDFS scan initiated |
-| `2` | CAC in progress — radar scan actively running |
-| `3` | CAC completed, channel switch in progress |
-| `4` | BGDFS mode switch in progress (seen right after move accepted) |
-| `5` | Aborted — radar detected during CAC |
-
-Typical successful progression: `4` → `2` → `-1`  
-Radar hit during CAC: `4` → `2` → `5`
-
----
-
 ## Example operation flow
 
 Radio is on `100/80` after a DFS hit, GUI set to Auto:

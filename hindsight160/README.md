@@ -136,34 +136,6 @@ This prevents overlap between the two radios. Each radio is processed independen
 
 ---
 
-## CAC polling
-
-The script polls `dfs_ap_move` every `CAC_POLL` seconds watching for `move status=-1` — the signal that CAC has completed. An initial mandatory 5‑second sleep allows the driver to transition state before the first poll.
-
-This approach handles all CAC durations automatically:
-
-- Standard DFS channels: ~60 seconds
-- Weather radar channels (120, 124, 128): up to 600 seconds
-
-`CAC_TIMEOUT=660` covers the maximum possible CAC duration globally with a one poll interval buffer.
-
-The `move status` values seen during polling:
-
-| Value | Meaning |
-|-------|---------|
-| `-1` | IDLE — CAC complete or no operation in progress |
-| `0` | Move requested, not yet started |
-| `1` | BGDFS scan initiated |
-| `2` | CAC in progress — radar scan actively running |
-| `3` | CAC completed, channel switch in progress |
-| `4` | BGDFS mode switch in progress (seen right after move accepted) |
-| `5` | Aborted — radar detected during CAC |
-
-Typical successful progression: `4` → `2` → `-1`  
-Radar hit during CAC: `4` → `2` → `5`
-
----
-
 ## How it works (step‑by‑step)
 
 1. **Self‑registration**

@@ -1,223 +1,390 @@
-# `fix_160A.sh` – Keep 5 GHz WiFi on 160 MHz (Asuswrt‑Merlin)
+#!/bin/sh
+# hindsight160.sh - Keep 5GHz radio(s) on 160MHz
+# Dual-band: one 5GHz radio, full fallback logic.
+# Tri-band:  two 5GHz radios, fixed block assignments, no fallback.
+# Mode is determined by IFACE1/IFACE2 config or auto-detection.
+# Runs via cron every 30 minutes (1,31 * * * *)
 
-## Disclaimer
+# Script name determined automatically
+SCRIPT_NAME="${0##*/}"
+SCRIPT_NAME="${SCRIPT_NAME%.*}"
 
-This script **does not** bypass or alter any regulatory‑compliant DFS (Dynamic Frequency Selection) or CAC (Channel Availability Check) behavior.  
-It only calls the existing `wl` command and leverages the **same built‑in DFS/CAC mechanisms** that Broadcom and ASUS provide with the router firmware. Using it means you accept that:
+IFACE1=""               # Leave empty for auto-detection.
+                        # If only IFACE1 is set, dual-band mode is assumed.
+                        # If both IFACE1 and IFACE2 are set, tri-band mode is assumed.
+IFACE2=""               # Second 5GHz interface for tri-band mode only.
 
-- If you believe this script is doing something illegal, that is effectively a claim about **Broadcom/ASUS’s own implementation and regulatory compliance**, not about this script specifically, because it only calls their existing `wl` command and uses the built‑in DFS/CAC behavior.
-- Any concerns about regulatory compliance should be directed to **ASUS** or Broadcom; this script is simply a wrapper around functionality that is already present in the firmware.
+# Dual-band options (ignored in tri-band mode)
+PREFERRED="100/160"     # Preferred 160MHz target (may be overridden by NVRAM if wl1_chanspec != 0/AUTO)
+DISABLE_FALLBACK=0      # 1=always stay in PREFERRED block, never try the other 160MHz block
 
-## Overview
-
-`fix_160A.sh` is a shell script designed for **dual‑band Asuswrt‑Merlin routers** that support **WiFi‑6 160‑MHz channels**.  
-It automatically attempts to keep the 5 GHz radio on a 160 MHz channel after a DFS hit causes downgrade to 80 MHz or a non‑DFS channel.
-
-- **Target devices**: Dual‑band AC/AX routers (e.g., RT‑AX82U, RT‑AX86U, RT‑AX88U) running Asuswrt‑Merlin.
-- **Function**: Runs via cron every 30 minutes (`1,31 * * * *`) and performs a controlled `dfs_ap_move` to recover 160 MHz operation.
-- **Tri‑band notes**: Tri‑band owners can run **two copies** of the script (e.g., `sticky_160.sh` and `sticky_160_2.sh`), offset the cron jobs by 1–2 minutes, and set `IFACE` manually for each radio.
-
----
-
-## Configuration variables
-
-Set these at the top of the script to tune behavior:
-
-```sh
-SCRIPT_NAME="fix_160A"      # Script name must match filename without .sh
-IFACE=""                    # 5GHz interface; leave empty for auto‑detect or set e.g. "eth6"
-COOLDOWN=60                 # Minimum seconds between recovery attempts
-CAC_WAIT=61                 # Wait time for CAC to finish (slightly above 61s)
-PREFERRED="100/160"         # Preferred 160MHz chanspec (may be overridden by NVRAM)
-DISABLE_FALLBACK=0          # 1: never switch to opposite 160MHz block once PREFERRED is chosen
-STRICT_STICKY=0             # 0: jump to PREFERRED only if current channel is outside block
-                            # 1: jump to PREFERRED if not on exact chanspec, even within block
-MANAGE_CRON=1               # Set to 1/0 to add/remove cron and init-start entries
-VERBOSE=2                   # 0=silent, 1=basic logs, 2=verbose (includes DFS status)
-LOG_ROTATE_RAM=1            # 1=RAM‑only log rotation, 0=use temp file on disk
+# Shared options
+COOLDOWN=60             # Minimum seconds between recovery attempts (per radio in tri-band)
+CAC_POLL=60             # Seconds between each CAC status poll
+CAC_TIMEOUT=660         # Maximum seconds to wait for CAC completion before giving up
+                        # 60s = standard DFS channels, 600s = weather radar channels (120/124/128)
+                        # 660s default covers all regions with a one poll interval buffer
+STRICT_STICKY=0         # 0=any 160MHz channel within assigned block is acceptable (default)
+                        # 1=must be on the exact preferred chanspec; any deviation triggers a move
+                        # Note: automatically set to 1 when NVRAM wl1_chanspec overrides PREFERRED (dual-band only)
+MANAGE_CRON=1           # Set to 1/0 to add/remove cron and init-start entries
+VERBOSE=2               # 0=silent, 1=basic logging, 2=verbose (includes DFS status blocks)
+LOG_ROTATE_RAM=1        # 0=use temp file (safer), 1=use RAM (no temp file on disk)
 LOG_LINES=200
-```
 
-Key behaviors:
+# Derived from SCRIPT_NAME - do not edit
+SCRIPT_PATH="/jffs/scripts/${SCRIPT_NAME}.sh"
+LOG_FILE="/jffs/scripts/${SCRIPT_NAME}.log"
+INIT_START="/jffs/scripts/init-start"
 
-- `DISABLE_FALLBACK=1` disables cross‑block fallback; the script will only ever attempt the `PREFERRED` 160‑MHz block.
-- `STRICT_STICKY=1` forces the radio back to the exact `PREFERRED` `chanspec` even if it’s already on 160 MHz in the same block.
-- `LOG_ROTATE_RAM=1` keeps logs in memory‑backed storage (no disk writes), while `0` uses a temporary file rotation on `/jffs`.
+# -----------------------------------------
+# 1. Functions
+# -----------------------------------------
 
----
+log() {
+    local level="$1"
+    local message="$2"
+    [ "$VERBOSE" -lt "$level" ] && return 0
+    echo "$(date): $message" >> "$LOG_FILE"
+}
 
-## NVRAM‑driven behavior
+finish() {
+    if [ "$LOG_ROTATE_RAM" = "1" ]; then
+        local content
+        content=$(tail -n $LOG_LINES "$LOG_FILE")
+        echo "$content" > "$LOG_FILE"
+    else
+        tail -n $LOG_LINES "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"
+    fi
+    exit 0
+}
 
-The script reads `wl1_chanspec` from NVRAM to respect the GUI settings:
+log_dfs_status() {
+    [ "$VERBOSE" -lt 2 ] && return 0
+    local iface="$1"
+    local label="$2"
+    local status
+    status=$(wl -i "$iface" dfs_ap_move 2>/dev/null)
+    log 2 "[$iface][DFS_STATUS:$label]"
+    echo "$status" | while IFS= read -r line; do
+        echo "$(date):   $line" >> "$LOG_FILE"
+    done
+}
 
-- If `wl1_chanspec=0` (Auto), the script uses `PREFERRED`, `DISABLE_FALLBACK`, and `STRICT_STICKY` as configured.
-- If `wl1_chanspec` is a valid `*/160` spec (e.g., `100/160`):
-  - `PREFERRED` is overridden to match the GUI‑selected channel.
-  - `DISABLE_FALLBACK=1` and `STRICT_STICKY=1` are enforced so the script always targets that exact channel.
+manage_cron_job() {
+    local action="$1"
+    local job_id="$SCRIPT_NAME"
+    local cron_schedule="1,31 * * * * $SCRIPT_PATH"
+    if [ "$action" = "add" ]; then
+        if cru l 2>/dev/null | grep -q "$job_id"; then
+            log 4 "[CRON] Cron job '$job_id' already exists. No action needed."
+        else
+            cru a "$job_id" "$cron_schedule"
+            log 1 "[ACTION] Added cron job '$job_id'."
+        fi
+    elif [ "$action" = "remove" ]; then
+        if cru l 2>/dev/null | grep -q "$job_id"; then
+            cru d "$job_id"
+            log 1 "[ACTION] Removed cron job '$job_id'."
+        else
+            log 4 "[CRON] Cron job '$job_id' does not exist. No action needed."
+        fi
+    fi
+}
 
-This means:  
-- If you **lock the GUI** to a specific 160‑MHz channel (e.g., `100/160`), the script will never try the opposite block and will aggressively try to stay on that channel.
-- If you set the GUI to **Auto**, the script behaves in its default “fallback‑enabled” mode.
+manage_init_start() {
+    local action="$1"
+    local entry="cru a \"$SCRIPT_NAME\" \"1,31 * * * * $SCRIPT_PATH\""
+    if [ "$action" = "add" ]; then
+        if [ ! -f "$INIT_START" ]; then
+            printf '#!/bin/sh\n%s\n' "$entry" > "$INIT_START"
+            chmod +x "$INIT_START"
+            log 1 "[ACTION] Created '$INIT_START' and added entry."
+        elif ! grep -qF "$entry" "$INIT_START"; then
+            echo "$entry" >> "$INIT_START"
+            log 1 "[ACTION] Added entry to existing '$INIT_START'."
+        else
+            log 4 "[INIT] Entry already present in '$INIT_START'. No action needed."
+        fi
+    elif [ "$action" = "remove" ]; then
+        if [ ! -f "$INIT_START" ]; then
+            log 4 "[INIT] '$INIT_START' does not exist. No action needed."
+        elif grep -qF "$entry" "$INIT_START"; then
+            sed -i "\|$SCRIPT_PATH|d" "$INIT_START"
+            log 1 "[ACTION] Removed entry from '$INIT_START'."
+        else
+            log 4 "[INIT] Entry not found in '$INIT_START'. No action needed."
+        fi
+    fi
+}
 
----
+try_dfs_ap_move() {
+    local iface="$1"
+    local target="$2"
+    local err result
+    err=$(wl -i "$iface" dfs_ap_move "$target" 2>&1)
+    result=$?
+    if [ "$result" -eq 0 ]; then
+        log 1 "[$iface][ACTION] dfs_ap_move accepted [$target]. Background CAC started."
+        return 0
+    else
+        log 1 "[$iface][INFO] dfs_ap_move rejected [$target]: $err"
+        return 1
+    fi
+}
 
-## Cron, init‑start, and locking
+# Poll dfs_ap_move status until move status=-1 (CAC complete) or CAC_TIMEOUT is reached.
+# Returns 0 if CAC completed successfully, 1 if timed out.
+wait_for_cac() {
+    local iface="$1"
+    local elapsed=0
+    local status move_status
 
-The script can manage itself:
+    log 1 "[$iface] Polling for CAC completion (poll=${CAC_POLL}s, timeout=${CAC_TIMEOUT}s)..."
+    log_dfs_status "$iface" "BGDFS-TRANSITION"
 
-- When `MANAGE_CRON=1`:
-  - Adds a cron job: `1,31 * * * * /jffs/scripts/fix_160A.sh`.
-  - Creates/updates `/jffs/scripts/init-start` so the cron job is re‑installed on each boot.
-- Uses `$LOCK_FILE` (`/tmp/fix_160A.last_action`) to enforce a cooldown window (`$COOLDOWN` seconds) so consecutive runs don’t immediately re‑trigger a DFS move.
+    sleep 5
 
-Timeouts are tuned around the router’s background DFS‑CAC mechanism; `CAC_WAIT=61` ensures the script waits long enough for the CAC to complete before logging the result.
+    while [ "$elapsed" -lt "$CAC_TIMEOUT" ]; do
+        sleep "$CAC_POLL"
+        elapsed=$((elapsed + CAC_POLL))
+        status=$(wl -i "$iface" dfs_ap_move 2>/dev/null)
+        move_status=$(echo "$status" | grep -o "move status=[0-9-]*" | head -1)
+        log 1 "[$iface] CAC poll ${elapsed}s: $move_status"
+        if [ "$VERBOSE" -ge 2 ]; then
+            log 2 "[$iface][DFS_STATUS:POLL-${elapsed}s]"
+            echo "$status" | while IFS= read -r line; do
+                echo "$(date):   $line" >> "$LOG_FILE"
+            done
+        fi
+        if echo "$move_status" | grep -q "move status=-1"; then
+            log 1 "[$iface] CAC complete after ${elapsed}s."
+            return 0
+        fi
+    done
 
----
+    log 1 "[$iface] CAC timed out after ${elapsed}s. Holding until next cron run."
+    return 1
+}
+# -----------------------------------------
+# 2. Unified process_radio
+# Args: iface, preferred, block_lo, block_hi, fallback
+#   fallback: empty string in tri-band mode (no cross-block attempts)
+#   lock_file: derived from iface name
+# -----------------------------------------
+process_radio() {
+    local iface="$1"
+    local preferred="$2"
+    local block_lo="$3"
+    local block_hi="$4"
+    local fallback="$5"
+    local lock_file="/tmp/${SCRIPT_NAME}_${iface}.last_action"
 
-## How it works (step‑by‑step)
+    log 1 "[$iface] RANGE=[${block_lo}-${block_hi}], PREFERRED=[$preferred]"
 
-1. **Interface detection**  
-   - If `IFACE` is empty, the script auto‑detects the first 5 GHz interface reported by `sta_phy_ifnames` that is in the 5 GHz range (channels 36–165).
-   - Logs `Auto‑detected 5GHz interface [$IFACE]`.
+    # Cooldown check
+    if [ -f "$lock_file" ]; then
+        local last_action now elapsed
+        last_action=$(cat "$lock_file")
+        now=$(date +%s)
+        elapsed=$((now - last_action))
+        if [ "$elapsed" -lt "$COOLDOWN" ]; then
+            log 1 "[$iface] Cooldown active. ${elapsed}s/${COOLDOWN}s elapsed. Skipping."
+            return
+        fi
+    fi
 
-2. **Cooldown & radio check**  
-   - If the last move was within `$COOLDOWN` seconds, exit early.
-   - If the radio is down (`wl ... isup` ≠ 1), exit with a log entry.
+    # Radio up check
+    local is_up
+    is_up=$(wl -i "$iface" isup 2>/dev/null)
+    if [ "$is_up" != "1" ]; then
+        log 1 "[$iface] Radio is DOWN. Skipping."
+        return
+    fi
 
-3. **Current state inspection**  
-   - Reads `wl -i "$IFACE" chanspec` to get current channel and width.
-   - If already on 160 MHz, behavior depends on settings:
-     - `STRICT_STICKY=1`: must be on exact `PREFERRED` `chanspec`; if not, attempt `dfs_ap_move` to `PREFERRED`.
-     - `DISABLE_FALLBACK=1`: must be in the preferred block range (e.g., 100–128); if not, attempt move back to `PREFERRED`.
-     - Otherwise, exit with `[__END] Already on 160MHz`.
+    # Read current radio state
+    local current_spec current_chan current_width
+    current_spec=$(wl -i "$iface" chanspec 2>/dev/null | awk '{print $1}')
+    current_chan="${current_spec%%/*}"
+    current_width="${current_spec#*/}"
 
-4. **Recovery logic (when not on 160 MHz)**  
-   - If `DISABLE_FALLBACK=1`:
-     - Only attempt `PRIMARY=PREFERRED`.
-   - If `DISABLE_FALLBACK=0`:
-     - Current in 36–64 block → `PRIMARY=36/160`, `FALLBACK=100/160`.
-     - Current in 100–128 block → `PRIMARY=100/160`, `FALLBACK=36/160`.
-     - Outside both blocks → `PRIMARY=PREFERRED`, `FALLBACK` opposite block.
-   - Tries `dfs_ap_move PRIMARY`; if rejected and `DISABLE_FALLBACK=0`, tries `FALLBACK`.
+    # Already on 160MHz
+    if [ "$current_width" = "160" ]; then
+        if [ "$STRICT_STICKY" = "1" ] && [ "$current_spec" != "$preferred" ]; then
+            log 1 "[$iface] On 160MHz [$current_spec] not preferred (STRICT_STICKY). Jumping back to [$preferred]."
+            log_dfs_status "$iface" "PRE-MOVE"
+            if try_dfs_ap_move "$iface" "$preferred"; then
+                date +%s > "$lock_file"
+                log 1 "[$iface] Move to [$preferred] accepted. Result confirmed on next cron run."
+            else
+                log 1 "[$iface] Move to [$preferred] rejected. Holding until next cron run."
+            fi
+        elif [ "$current_chan" -lt "$block_lo" ] || [ "$current_chan" -gt "$block_hi" ]; then
+            log 1 "[$iface] On 160MHz [$current_spec] but outside assigned block (${block_lo}-${block_hi}). Jumping to [$preferred]."
+            log_dfs_status "$iface" "PRE-MOVE"
+            if try_dfs_ap_move "$iface" "$preferred"; then
+                date +%s > "$lock_file"
+                log 1 "[$iface] Move to [$preferred] accepted. Result confirmed on next cron run."
+            else
+                log 1 "[$iface] Move to [$preferred] rejected. Holding until next cron run."
+            fi
+        else
+            log 1 "[$iface] Already on 160MHz [$current_spec] in preferred block. No action needed."
+        fi
+        return
+    fi
 
-5. **Post‑CAC verification**  
-   - After `dfs_ap_move` is accepted, the script:
-     - Waits `$CAC_WAIT` seconds for background CAC.
-     - Reads `chanspec` again and logs:
-       - `[OK] Recovery successful` if width is `160`.
-       - `[NOTICE] Recovery failed` if still <160 MHz.
-   - If disabled, no fallback is attempted; if enabled, it may retry the fallback on the next run.
+    # Not on 160MHz - determine recovery target
+    local target
+    if [ "$STRICT_STICKY" = "1" ]; then
+        target="$preferred"
+    elif [ "$current_chan" -ge "$block_lo" ] && [ "$current_chan" -le "$block_hi" ]; then
+        target="${current_chan}/160"
+    else
+        target="$preferred"
+    fi
 
-6. **Logging and rotation**  
-   - Logs are written to `/jffs/scripts/fix_160A.log`.
-   - When `LOG_ROTATE_RAM=1`, `tail -n $LOG_LINES` keeps the log capped in memory; otherwise a temp‑file rotation is used.
+    log 1 "[$iface] Current width [${current_width}MHz]. Attempting recovery to [$target]."
+    log_dfs_status "$iface" "PRE-MOVE"
 
----
+    local moved=0
+    if try_dfs_ap_move "$iface" "$target"; then
+        moved=1
+    elif [ -n "$fallback" ]; then
+        log 1 "[$iface] Falling back to [$fallback]."
+        if try_dfs_ap_move "$iface" "$fallback"; then
+            moved=1
+            target="$fallback"
+        fi
+    fi
 
-## Example operation flow
+    if [ "$moved" = "0" ]; then
+        log 1 "[$iface] All dfs_ap_move attempts rejected. Holding until next cron run."
+        return
+    fi
 
-Typical AUTO‑mode scenario (GUI set to Auto):
+    date +%s > "$lock_file"
 
-- Radio is on `100/80` after a DFS hit.
-- Script:
-  - Detects current width = `80`.
-  - Sets `PRIMARY=100/160` and `FALLBACK=36/160`.
-  - Tries `dfs_ap_move 100/160`.
-  - If that fails (NOP/CAC), tries `36/160`.
-- Radio moves to `100/160` or `36/160` and remains there until another DFS hit.
-- On the next run, if already on 160 MHz and within the same block, no action is taken (unless `STRICT_STICKY=1` and channel is not exactly `PREFERRED`).
+    if ! wait_for_cac "$iface"; then
+        return
+    fi
 
-If `DISABLE_FALLBACK=0` and the preferred block is still blocked, the script may succeed on the opposite block, achieving:
-- `100/160` → `36/160` (or vice‑versa) as needed to keep maximum possible bandwidth.
+    local post_spec post_width
+    post_spec=$(wl -i "$iface" chanspec 2>/dev/null | awk '{print $1}')
+    post_width="${post_spec#*/}"
+    log_dfs_status "$iface" "POST-CAC"
+    log 1 "[$iface] Post-CAC state [CHANSPEC=$post_spec]"
 
----
+    if [ "$post_width" = "160" ]; then
+        log 1 "[$iface] Recovery successful. Now on [$post_spec]."
+    else
+        log 1 "[$iface] Recovery failed. Still on [$post_spec]."
+        if [ -n "$fallback" ] && [ "$target" != "$fallback" ]; then
+            log 1 "[$iface] Trying fallback [$fallback]."
+            if try_dfs_ap_move "$iface" "$fallback"; then
+                date +%s > "$lock_file"
+                log 1 "[$iface] Fallback [$fallback] accepted. Result confirmed on next cron run."
+            else
+                log 1 "[$iface] Fallback [$fallback] also rejected. Holding until next cron run."
+            fi
+        else
+            log 1 "[$iface] Holding until next cron run."
+        fi
+    fi
+}
 
-## Quick install
+# -----------------------------------------
+# 3. Mode runners
+# -----------------------------------------
+run_dualband() {
+    local iface="$1"
+    local pref_chan pref_block_lo pref_block_hi fallback
+    pref_chan="${PREFERRED%%/*}"
+    if [ "$pref_chan" -ge 36 ] && [ "$pref_chan" -le 64 ]; then
+        pref_block_lo=36; pref_block_hi=64
+    else
+        pref_block_lo=100; pref_block_hi=128
+    fi
+    if [ "$DISABLE_FALLBACK" = "1" ]; then
+        fallback=""
+    else
+        fallback=$([ "$PREFERRED" = "100/160" ] && echo "36/160" || echo "100/160")
+    fi
+    process_radio "$iface" "$PREFERRED" "$pref_block_lo" "$pref_block_hi" "$fallback"
+}
 
-Run this on the router shell (via SSH) to install and register the script:
+run_triband() {
+    process_radio "$IFACE1" "36/160"  36  64  ""
+    sleep 10
+    process_radio "$IFACE2" "100/160" 100 128 ""
+}
 
-```sh
-curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/fix_160A.sh" -o /jffs/scripts/fix_160A.sh && \
-chmod 755 /jffs/scripts/fix_160A.sh && \
-cru a fix_160A "1,31 * * * * /jffs/scripts/fix_160A.sh"
-```
+# -----------------------------------------
+# 4. NVRAM config override (dual-band only)
+# -----------------------------------------
+nvram_override() {
+    local nvram_cs
+    nvram_cs=$(nvram get wl1_chanspec 2>/dev/null | tr -d ' ')
+    if [ -z "$nvram_cs" ] || [ "$nvram_cs" = "0" ]; then
+        log 1 "[NVRAM] wl1_chanspec=auto (0). Using config defaults [PREFERRED=$PREFERRED]."
+    elif [ "${nvram_cs#*/}" = "160" ]; then
+        PREFERRED="$nvram_cs"
+        DISABLE_FALLBACK=1
+        STRICT_STICKY=1
+        log 1 "[NVRAM] wl1_chanspec=[$nvram_cs]. Overriding: PREFERRED=[$PREFERRED], DISABLE_FALLBACK=1, STRICT_STICKY=1."
+    else
+        log 1 "[NVRAM] wl1_chanspec=[$nvram_cs] not 160MHz chanspec. Using config defaults [PREFERRED=$PREFERRED]."
+    fi
+}
 
-This:
+# -----------------------------------------
+# 5. Self-registration
+# -----------------------------------------
+if [ "$MANAGE_CRON" = "1" ]; then
+    manage_cron_job "add"
+    manage_init_start "add"
+else
+    manage_cron_job "remove"
+    manage_init_start "remove"
+fi
 
-- Downloads the script to `/jffs/scripts/fix_160A.sh`.
-- Makes it executable.
-- Sets a cron job to run every 30 minutes at 1 and 31 minutes past the hour.
+# -----------------------------------------
+# 6. Interface detection and mode selection
+# -----------------------------------------
+if [ -n "$IFACE1" ] && [ -n "$IFACE2" ]; then
+    log 1 "[INFO] Tri-band mode. IFACE1=[$IFACE1], IFACE2=[$IFACE2]."
+    run_triband
 
----
+elif [ -n "$IFACE1" ] && [ -z "$IFACE2" ]; then
+    log 1 "[INFO] Dual-band mode. IFACE1=[$IFACE1]."
+    nvram_override
+    run_dualband "$IFACE1"
 
-## Step‑by‑step install
+else
+    _count=0
+    for _if in $(nvram get wl_ifnames 2>/dev/null); do
+        _chan=$(wl -i "$_if" chanspec 2>/dev/null | awk '{print $1}')
+        _chan="${_chan%%/*}"
+        [ -n "$_chan" ] && [ "$_chan" -ge 36 ] && [ "$_chan" -le 165 ] 2>/dev/null || continue
+        _count=$((_count + 1))
+        [ "$_count" -eq 1 ] && IFACE1="$_if"
+        [ "$_count" -eq 2 ] && IFACE2="$_if"
+    done
 
-1. Download:
+    if [ "$_count" -eq 0 ]; then
+        log 1 "[__END] No 5GHz interfaces found. Exiting."
+        exit 1
+    elif [ "$_count" -eq 1 ]; then
+        log 1 "[INFO] Auto-detected dual-band mode. IFACE1=[$IFACE1]."
+        nvram_override
+        run_dualband "$IFACE1"
+    else
+        log 1 "[INFO] Auto-detected tri-band mode. IFACE1=[$IFACE1], IFACE2=[$IFACE2]."
+        run_triband
+    fi
+fi
 
-   ```sh
-   curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/fix_160A.sh" -o /jffs/scripts/fix_160A.sh
-   ```
-
-2. Make executable:
-
-   ```sh
-   chmod 755 /jffs/scripts/fix_160A.sh
-   ```
-
-3. Add cron job:
-
-   ```sh
-   cru a fix_160A "1,31 * * * * /jffs/scripts/fix_160A.sh"
-   ```
-
-4. Ensure it survives reboots (if `MANAGE_CRON=1`):
-
-   The script will auto‑create/update `/jffs/scripts/init-start` so the cron job is re‑installed on boot.
-
----
-
-## Managing the script
-
-### Remove the cron job
-
-```sh
-cru d fix_160A
-```
-
-Re‑enable later:
-
-```sh
-cru a fix_160A "1,31 * * * * /jffs/scripts/fix_160A.sh"
-```
-
-### Disable self‑registration (manual control)
-
-Set:
-
-```sh
-MANAGE_CRON=0
-```
-
-Then run the script once and it will:
-
-- Remove the cron job
-- Remove cron registration from `/jffs/scripts/init-start`.
-
-You can then manage cron and init‑start entries yourself.
-
----
-
-## Logging and troubleshooting
-
-- Logs are written to `/jffs/scripts/fix_160A.log`.
-- Useful `VERBOSE` levels:
-  - `0`: Silent.
-  - `1`: Basic info (actions, DFS status summary).
-  - `2`: Verbose (full `wl ... dfs_ap_move` status blocks).
-- To inspect current DFS status blocks:
-
-  ```sh
-  wl -i eth6 dfs_ap_move
-  ```
-
-  (replace `eth6` with your actual 5 GHz interface).
+# -----------------------------------------
+# 7. Rotate log and end
+# -----------------------------------------
+finish

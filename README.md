@@ -23,153 +23,155 @@ ASUS never implemented an automatic 160 MHz recovery mechanism in their firmware
 - **Function**: Runs via cron every 30 minutes (`1,31 * * * *`).
 - **Mode selection**: Automatically detects whether the router is dual‑band or tri‑band. Can also be forced manually via `IFACE1`/`IFACE2`.
 
----
+***
 
-## Dual‑band vs tri‑band mode
+## 📦 Features
 
-| | Dual-band | Tri-band |
-|---|---|---|
-| Radios managed | 1 | 2 |
-| Block assignment | Derived from `PREFERRED` | IFACE1 fixed to 36–64, IFACE2 fixed to 100–128 |
-| Fallback | Optional cross‑block fallback | None — blocks are separated by design |
-| NVRAM override | Yes (`wl1_chanspec`) | No |
+- **Auto‑detects** 5 GHz radios from `wl_ifnames` if `IFACE1`/`IFACE2` are left empty.  
+- **Dual‑band** mode: single 5 GHz radio with preferred 160 MHz block and optional fallback to the other 160 MHz block.  
+- **Tri‑band** mode: two 5 GHz radios with fixed 160 MHz blocks:
+  - `IFACE1`: 36–64 MHz block (e.g., `36/160`)  
+  - `IFACE2`: 100–128 MHz block (e.g., `100/160`)  
+- **BG‑DFS aware**: checks `bgdfs160` capability and only acts when there are 160 MHz‑capable clients.  
+- **Cooldown & CAC**: avoids flapping by enforcing a cooldown between recovery attempts and polling CAC status up to a configurable timeout.  
+- **Configurable behavior**:
+  - `PREFERRED`, `ENABLE_FALLBACK`, and `STRICT_STICKY` knobs.  
+  - `COOLDOWN`, `CAC_POLL`, and `CAC_TIMEOUT` timing.  
+  - Logging level (`VERBOSE`) and log‑rotation behavior.  
+- **Self‑installing**: `install`/`uninstall` subcommands create/remove `cru` cron jobs and an `init‑start` script.  
+- **Interactive menu**: edit settings directly from the router console or SSH.
 
----
+***
 
-## Mode selection
+## ⚙️ Requirements
 
-Mode is determined in this order:
+- **Router firmware**: Asuswrt‑Merlin or similar (supports `wl`, `nvram`, and `cru`).  
+- **5 GHz radio(s)** capable of 160 MHz channel width and DFS.  
+- Root‑level shell access (SSH).  
 
-1. `IFACE1` and `IFACE2` both set → **tri‑band mode**
-2. Only `IFACE1` set → **dual‑band mode**
-3. Both empty → **auto‑detect** — scans `wl_ifnames` for 5 GHz interfaces:
-   - 1 found → dual‑band mode
-   - 2 found → tri‑band mode
+This script assumes your router exposes `wl_ifnames` and `wl -i $iface dfs_ap_move` for BG‑DFS moves.
 
----
+***
 
-## Configuration variables
+## 🧩 Dual‑ vs. Tri‑Band Mode
+
+| Mode        | IFACE1 | IFACE2 | Behavior                                                                 |
+|------------|--------|--------|--------------------------------------------------------------------------|
+| Dual‑band  | set    | unset  | Single 5 GHz radio; `PREFERRED` block + optional fallback.              |
+| Tri‑band   | set    | set    | Two 5 GHz radios; fixed 36–64 and 100–128 blocks, no fallback.         |
+
+If both `IFACE1` and `IFACE2` are **empty**, the script auto‑detects 5 GHz radios from `nvram get wl_ifnames`.
+
+***
+
+## ⚙️ Configuration Options
+
+Most behavior is controlled by these variables at the top of the script:
+
+| Variable            | Valid values                       | Meaning                                                                 |
+|---------------------|------------------------------------|-------------------------------------------------------------------------|
+| `IFACE1`            | interface name (e.g., `eth6`)      | First 5 GHz interface; auto‑detect if empty.                           |
+| `IFACE2`            | interface name (e.g., `eth7`)      | Second 5 GHz radio (tri‑band only).                                    |
+| `PREFERRED`         | e.g., `100/160` or `36/160`        | Target 160 MHz chanspec for dual‑band.                                 |
+| `ENABLE_FALLBACK`   | `0` or `1`                         | Allow fallback to the other 160 MHz block if primary fails.            |
+| `STRICT_STICKY`     | `0` or `1`                         | Enforce exact `PREFERRED` chanspec or any 160 MHz in the block.        |
+| `COOLDOWN`          | seconds (e.g., `60`)               | Min delay between recovery attempts.                                   |
+| `CAC_POLL`          | seconds (≥ `60`)                   | Interval between CAC status polls.                                     |
+| `CAC_TIMEOUT`       | seconds (e.g., `660`)              | Max wait for CAC before giving up.                                     |
+| `MANAGE_CRON`       | `0` or `1`                         | Auto‑manage `cru` cron and `init‑start` entries.                       |
+| `VERBOSE`           | `0`, `1`, or `2`                   | Log level: `0` = silent, `2` = verbose DFS blocks.                     |
+| `LOG_ROTATE_RAM`    | `0` or `1`                         | Rotate log in RAM vs using a temp file.                                |
+| `LOG_LINES`         | positive integer                   | Number of log lines to keep after rotation.                            |
+
+Fixed‑channel 160 MHz settings in the **router GUI / NVRAM** (`wl1_chanspec`) override `PREFERRED` and force `ENABLE_FALLBACK=0` and `STRICT_STICKY=1`.
+
+***
+
+## 📜 Usage
+
+Store the script on your router (e.g., in `/jffs/scripts/`):
 
 ```sh
-IFACE1=""               # First 5GHz interface. Leave empty for auto-detection.
-                        # If only IFACE1 is set, dual-band mode is assumed.
-                        # If both IFACE1 and IFACE2 are set, tri-band mode is assumed.
-IFACE2=""               # Second 5GHz interface for tri-band mode only.
-
-# Dual-band options (ignored in tri-band mode)
-PREFERRED="100/160"     # Preferred 160MHz chanspec (may be overridden by NVRAM)
-DISABLE_FALLBACK=1      # 1: never switch to opposite 160MHz block once PREFERRED is chosen
-
-# Shared options
-COOLDOWN=60             # Minimum seconds between recovery attempts (per radio in tri-band)
-CAC_POLL=60             # Seconds between each CAC status poll
-CAC_TIMEOUT=660         # Maximum seconds to wait for CAC before giving up
-                        # 60s = standard DFS channels
-                        # 600s = weather radar channels (120/124/128)
-                        # 660s default covers all regions with one poll interval buffer
-STRICT_STICKY=0         # 0: any 160MHz channel within assigned block is acceptable
-                        # 1: must be on exact preferred chanspec; any deviation triggers a move
-                        # Note: automatically set to 1 when NVRAM wl1_chanspec overrides PREFERRED (dual-band only)
-MANAGE_CRON=1           # 1/0 to add/remove cron and init-start entries
-VERBOSE=2               # 0=silent, 1=basic logs, 2=verbose (includes DFS status blocks)
-LOG_ROTATE_RAM=1        # 1=RAM‑only log rotation, 0=use temp file on disk
-LOG_LINES=200
+# Example location
+/jffs/scripts/hindsight160.sh
 ```
 
----
+### 1. Run directly
 
-## Dual‑band behavior
+```sh
+# Run script (same as `exec`, used by cron)
+/jffs/scripts/hindsight160.sh
 
-### PREFERRED and block ranges
+# Run script explicitly
+/jffs/scripts/hindsight160.sh exec
 
-`PREFERRED` sets the target 160 MHz chanspec. The block range is derived automatically:
+# Open interactive config menu
+/jffs/scripts/hindsight160.sh menu
+```
 
-- `PREFERRED` channel 36–64 → block range 36–64, opposite block 100–128
-- `PREFERRED` channel 100–128 → block range 100–128, opposite block 36–64
+### 2. Install (cron + init‑start)
 
-### DISABLE_FALLBACK
+```sh
+/jffs/scripts/hindsight160.sh install
+```
 
-- `1`: Script only ever attempts `PREFERRED`. No cross‑block fallback.
-- `0`: If the preferred block is unavailable, the script tries the opposite 160 MHz block.
+This:
+- Adds a cron job via `cru a "hindsight160" "1,31 * * * * /jffs/scripts/hindsight160.sh exec"`.  
+- Creates or updates `/jffs/scripts/init-start` so the cron job survives reboots.
 
-### STRICT_STICKY
+### 3. Uninstall
 
-- `0`: Any 160 MHz channel within the preferred block is acceptable. No action taken.
-- `1`: Must be on the exact `PREFERRED` chanspec. Any deviation triggers a move back.
+```sh
+/jffs/scripts/hindsight160.sh uninstall
+```
 
-### Recovery target when not on 160 MHz
+Removes the cron job, `init‑start` entry, and optionally the script and log with prompts.
 
-- `STRICT_STICKY=1` → always move to `PREFERRED`
-- Within preferred block → upgrade in place on current channel (e.g. `52/160`)
-- Outside preferred block → move to `PREFERRED`
+***
 
-### NVRAM override
+## 📋 Menu Usage
 
-Reads `wl1_chanspec` from NVRAM to respect the router GUI settings:
+Run:
 
-- `wl1_chanspec=0` (Auto) → uses script config defaults
-- Valid `*/160` chanspec → overrides `PREFERRED`, forces `DISABLE_FALLBACK=1` and `STRICT_STICKY=1`
+```sh
+/jffs/scripts/hindsight160.sh menu
+```
 
----
+You can then configure:
+- Interfaces (`IFACE1`, `IFACE2`)  
+- `PREFERRED` 160 MHz chanspec  
+- `ENABLE_FALLBACK` and `STRICT_STICKY` behavior  
+- Timing (cooldown, CAC polling, timeout)  
+- Logging (`VERBOSE`, `LOG_ROTATE_RAM`, `LOG_LINES`)  
+- Auto‑install behavior (`MANAGE_CRON`)  
 
-## Tri‑band behavior
+Changes are written back into the script file using `sed`, so the configuration is persistent.
 
-Each radio has a fixed block assignment — no NVRAM override, no fallback:
+***
 
-| Interface | Block | Preferred chanspec |
-|-----------|-------|--------------------|
-| IFACE1 | 36–64 | `36/160` |
-| IFACE2 | 100–128 | `100/160` |
+## 📊 Logging & Diagnostics
 
-This prevents overlap between the two radios. Each radio is processed independently with its own lock file and cooldown.
+- Log file: `/jffs/scripts/hindsight160.log` by default.  
+- If `VERBOSE` ≥ `2`, full `wl -i $iface dfs_ap_move` output and DFS status blocks are logged for debugging CAC delays.  
+- After each run, the log is rotated to retain the last `LOG_LINES` lines.
 
-### STRICT_STICKY in tri‑band
+Use `VERBOSE=2` if you want to see why a CAC is taking long or failing (e.g., weather‑radar channels 120/124/128).
 
-- `0`: Any 160 MHz channel within the assigned block is acceptable.
-- `1`: Must be on the exact preferred chanspec (`36/160` or `100/160`). Any deviation triggers a move back.
+***
 
-### Recovery target when not on 160 MHz (tri‑band)
+## 🛠️ Customization Hints
 
-- `STRICT_STICKY=1` → always move to preferred (`36/160` or `100/160`)
-- Within assigned block → upgrade in place on current channel (e.g. `52/160`)
-- Outside assigned block → move to preferred
+- **Region‑specific 160 MHz channels**: If your region has limited 160 MHz channels, set a fixed 160 MHz channel in the **router GUI**; the script will maintain that exact channel.  
 
----
+- **RAM‑ vs disk‑based log rotation**:  
+  - `LOG_ROTATE_RAM=1` keeps log trimming in RAM (faster, but lost on power loss).  
+  - `LOG_ROTATE_RAM=0` uses a `.tmp` file for rotation (safer if power‑loss is a concern).  
 
-## How it works (step‑by‑step)
-
-1. **Self‑registration**
-   If `MANAGE_CRON=1`, adds cron job and `init-start` entry. If `0`, removes them.
-
-2. **Mode selection**
-   Determines dual‑band or tri‑band mode from `IFACE1`/`IFACE2` config or auto‑detection.
-
-3. **NVRAM override** *(dual‑band only)*
-   Reads `wl1_chanspec`. If a valid 160 MHz chanspec is set in the GUI, overrides `PREFERRED`, `DISABLE_FALLBACK`, and `STRICT_STICKY`.
-
-4. **For each radio** (`process_radio` runs once for dual‑band, twice for tri‑band):
-
-   a. **Cooldown check** — skip if last attempt was within `COOLDOWN` seconds  
-   b. **Radio up check** — skip if radio is down  
-   c. **Read current chanspec**  
-   d. **Already on 160 MHz?**
-      - `STRICT_STICKY=1` + wrong exact channel → move to preferred
-      - Outside assigned block → move to preferred
-      - Fine where it is → no action  
-   e. **Not on 160 MHz** → determine recovery target → attempt `dfs_ap_move`
-      - Rejected (+ fallback available in dual‑band) → try fallback
-      - All rejected → hold until next cron run
-      - Accepted → stamp lock file → poll for CAC completion → verify result
-
-5. **Log rotation**
-   Caps log at `LOG_LINES` lines on exit.
-
----
 
 ## Quick install
 
 ```sh
-curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/hindsight160/hindsight160.sh" -o /jffs/scripts/hindsight160.sh && \
+curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/hindsight160.sh" -o /jffs/scripts/hindsight160.sh && \
 chmod 755 /jffs/scripts/hindsight160.sh && \
 cru a hindsight160 "1,31 * * * * /jffs/scripts/hindsight160.sh"
 ```
@@ -180,7 +182,7 @@ cru a hindsight160 "1,31 * * * * /jffs/scripts/hindsight160.sh"
 
 1. Download:
    ```sh
-   curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/hindsight160/hindsight160.sh" -o /jffs/scripts/hindsight160.sh
+   curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/hindsight160.sh" -o /jffs/scripts/hindsight160.sh
    ```
 
 2. Make executable:
@@ -197,38 +199,3 @@ cru a hindsight160 "1,31 * * * * /jffs/scripts/hindsight160.sh"
 
 ---
 
-## Managing the script
-
-### Remove the cron job
-```sh
-cru d hindsight160
-```
-
-### Disable self‑registration
-Set `MANAGE_CRON=0` and run the script once. It will remove the cron job and its entry from `init-start`.
-
----
-
-## Logging and troubleshooting
-
-- Logs are written to `/jffs/scripts/hindsight160.log`
-- `VERBOSE` levels:
-  - `0`: Silent
-  - `1`: Basic info — mode, actions, CAC poll results, recovery outcome
-  - `2`: Verbose — full `dfs_ap_move` status blocks at each poll interval
-
-To inspect current DFS status manually:
-```sh
-wl -i eth6 dfs_ap_move
-```
-Replace `eth6` with your actual 5 GHz interface name.
-
-To check what interfaces your router uses:
-```sh
-nvram get wl_ifnames
-```
-
-To check what channel the GUI has configured:
-```sh
-nvram get wl1_chanspec
-```

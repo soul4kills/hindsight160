@@ -110,7 +110,7 @@ uninstall_cron() {
 }
 
 apply_block() {
-    # Tear down any existing rules first (silently â€” no status write mid-flight)
+    # Tear down any existing rules first (silently no status write mid-flight)
     iptables  -D FORWARD -j "$CHAIN" 2>/dev/null
     iptables  -F "$CHAIN" 2>/dev/null
     iptables  -X "$CHAIN" 2>/dev/null

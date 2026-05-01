@@ -201,7 +201,7 @@ function renderTable() {
   if (wlw_entries.length === 0) {
     var tr = document.createElement('tr');
     tr.className = 'wlw_empty_row';
-    tr.innerHTML = '<td colspan="3">No entries Ã¢â‚¬â€ use the form below to add MACs, IPs, or interfaces.</td>';
+    tr.innerHTML = '<td colspan="3">No entries‚ use the form below to add MACs, IPs, or interfaces.</td>';
     tbody.appendChild(tr);
     return;
   }
@@ -325,7 +325,7 @@ function wlw_keydown(e) {
           built-in defaults at runtime.
         </div>
 
-        <!-- Â SCHEDULE Â -->
+        <!-- SCHEDULE -->
         <div class="wlw_section_label" style="margin-top:16px;">Block Schedule</div>
         <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0"
                bordercolor="#6b8fa3" class="FormTable">
@@ -337,7 +337,7 @@ function wlw_keydown(e) {
               &nbsp;:&nbsp;
               <input type="text" id="wlw_start_mm" maxlength="2" class="input_6_table"
                      value="00" style="width:38px;text-align:center;" autocorrect="off">
-              <span class="wlw_hint">&nbsp;24-hour Ã¢â‚¬â€ block activates at this time nightly</span>
+              <span class="wlw_hint">&nbsp;24-hour‚ block activates at this time nightly</span>
             </td>
           </tr>
           <tr>
@@ -348,12 +348,12 @@ function wlw_keydown(e) {
               &nbsp;:&nbsp;
               <input type="text" id="wlw_end_mm" maxlength="2" class="input_6_table"
                      value="00" style="width:38px;text-align:center;" autocorrect="off">
-              <span class="wlw_hint">&nbsp;24-hour Ã¢â‚¬â€ block is lifted at this time</span>
+              <span class="wlw_hint">&nbsp;24-hour‚ block is lifted at this time</span>
             </td>
           </tr>
         </table>
 
-        <!-- Â WHITELIST TABLE Â -->
+        <!-- WHITELIST TABLE -->
         <div class="wlw_section_label" style="margin-top:20px;">Whitelisted Entries</div>
         <table width="100%" border="1" align="center" cellpadding="0" cellspacing="0"
                bordercolor="#6b8fa3" class="FormTable">

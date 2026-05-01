@@ -207,9 +207,9 @@ install_script() {
             echo "sh $SCRIPT install" >> "$SERVICES_START"
     else
         printf "#!/bin/sh\nsh %s install\n" "$SCRIPT" > "$SERVICES_START"
-        chmod +x "$SERVICES_START"
+        chmod 755 "$SERVICES_START"
     fi
-
+    chmod 755 /jffs/addons/wl_window/*.sh
     echo "[+] Whitelist Window fully installed."
 }
 

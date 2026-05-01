@@ -171,7 +171,7 @@ Use `VERBOSE=2` if you want to see why a CAC is taking long or failing (e.g., we
 ## Quick install
 
 ```sh
-curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/hindsight160.sh" -o /jffs/scripts/hindsight160.sh && \
+curl -L "https://raw.githubusercontent.com/soul4kills/Asus-Merlin-Scripts/refs/heads/main/hindsight160/hindsight160.sh" -o /jffs/scripts/hindsight160.sh && \
 chmod 755 /jffs/scripts/hindsight160.sh && \
 cru a hindsight160 "1,31 * * * * /jffs/scripts/hindsight160.sh"
 ```
@@ -182,7 +182,7 @@ cru a hindsight160 "1,31 * * * * /jffs/scripts/hindsight160.sh"
 
 1. Download:
    ```sh
-   curl -L "https://raw.githubusercontent.com/soul4kills/hindsight160/refs/heads/main/hindsight160.sh" -o /jffs/scripts/hindsight160.sh
+   curl -L "https://raw.githubusercontent.com/soul4kills/Asus-Merlin-Scripts/refs/heads/main/hindsight160/hindsight160.sh" -o /jffs/scripts/hindsight160.sh
    ```
 
 2. Make executable:

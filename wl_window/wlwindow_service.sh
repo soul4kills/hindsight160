@@ -29,14 +29,14 @@ cfg_set() {
     fi
 }
 
-# â”€â”€ Manual start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Manual start
 if [ "$EVENT" = "wlwindow_start" ]; then
     logger "wl_window" "Manual start triggered from webui."
     sh "$SCRIPT" start
     exit 0
 fi
 
-# â”€â”€ Manual stop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Manual stop
 if [ "$EVENT" = "wlwindow_stop" ]; then
     logger "wl_window" "Manual stop triggered from webui."
     sh "$SCRIPT" stop
@@ -45,7 +45,7 @@ fi
 
 [ "$EVENT" != "wlwindow" ] && exit 0
 
-# â”€â”€ Apply / save settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Apply / save settings
 # Merlin has already written all amng_custom fields into SETTINGS as
 # plain "key value" lines before service-event is called. wlw_entries
 # is already there; wl_window.sh reads and parses it directly.

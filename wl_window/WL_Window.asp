@@ -16,7 +16,7 @@
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
 <script type="text/javascript" language="JavaScript" src="/validator.js"></script>
 <style>
-  /* Ã¢â€â‚¬Ã¢â€â‚¬ Status pill Ã¢â€â‚¬Ã¢â€â‚¬ */
+  /* Status pill */
   #wlw_status_pill {
     display: inline-flex;
     align-items: center;
@@ -35,7 +35,7 @@
   .pill_active   #wlw_status_dot { background: #7fdd7f; box-shadow: 0 0 5px #7fdd7f; }
   .pill_inactive #wlw_status_dot { background: #555555; }
 
-  /* Ã¢â€â‚¬Ã¢â€â‚¬ Type badges Ã¢â€â‚¬Ã¢â€â‚¬ */
+  /* Type badges */
   .wlw_type_badge {
     display: inline-block; padding: 1px 7px; border-radius: 2px;
     font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
@@ -44,7 +44,7 @@
   .wlw_type_ip  { background: #5b5ea6; color: #fff; }
   .wlw_type_int { background: #3c763d; color: #fff; }
 
-  /* Ã¢â€â‚¬Ã¢â€â‚¬ Whitelist table Ã¢â€â‚¬Ã¢â€â‚¬ */
+  /* Whitelist table */
   #wlw_entry_table { width: 100%; border-collapse: collapse; }
   #wlw_entry_table th {
     background: #32454E; color: #b3bdc2; font-size: 11px; font-weight: normal;
@@ -63,13 +63,13 @@
   }
   .wlw_del_btn:hover { background: #7a2020; color: #fff; }
 
-  /* Ã¢â€â‚¬Ã¢â€â‚¬ Section labels Ã¢â€â‚¬Ã¢â€â‚¬ */
+  /* Section labels */
   .wlw_section_label {
     color: #93b0bd; font-size: 11px; font-weight: bold;
     text-transform: uppercase; letter-spacing: 1px; padding: 10px 0 4px 0;
   }
 
-  /* Ã¢â€â‚¬Ã¢â€â‚¬ Add entry inputs Ã¢â€â‚¬Ã¢â€â‚¬ */
+  /* Add entry inputs */
   select.wlw_type_sel {
     background: #1e2d34; border: 1px solid #4a5f6a;
     color: #c0cdd2; padding: 3px 6px; font-size: 12px;
@@ -87,7 +87,7 @@
   }
   .wlw_add_btn:hover { background: #225066; color: #fff; }
 
-  /* Ã¢â€â‚¬Ã¢â€â‚¬ Manual control Ã¢â€â‚¬Ã¢â€â‚¬ */
+  /* Manual control */
   .wlw_ctrl_bar { display: flex; align-items: center; gap: 10px; padding: 8px 4px; flex-wrap: wrap; }
   .wlw_start_btn {
     background: #1a3d1a; border: 1px solid #3a7a3a; color: #7fdd7f;

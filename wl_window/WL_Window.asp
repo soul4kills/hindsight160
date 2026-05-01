@@ -16,35 +16,37 @@
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
 <script type="text/javascript" language="JavaScript" src="/validator.js"></script>
 <style>
-  /* Status pill */
-  #wlw_status_pill {
+  /* -- Status pills -- */
+  .wlw_pill {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 3px 12px 3px 8px;
-    border-radius: 12px;
-    font-size: 12px;
+    gap: 6px;
+    padding: 2px 10px 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
     font-weight: bold;
     letter-spacing: 0.5px;
     vertical-align: middle;
-    margin-left: 10px;
+    white-space: nowrap;
   }
-  #wlw_status_pill.pill_active   { background: #1a3d1a; border: 1px solid #3a7a3a; color: #7fdd7f; }
-  #wlw_status_pill.pill_inactive { background: #2e2e2e; border: 1px solid #555;    color: #888888; }
-  #wlw_status_dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .pill_active   #wlw_status_dot { background: #7fdd7f; box-shadow: 0 0 5px #7fdd7f; }
-  .pill_inactive #wlw_status_dot { background: #555555; }
+  .wlw_pill.pill_active   { background: #1a3d1a; border: 1px solid #3a7a3a; color: #7fdd7f; }
+  .wlw_pill.pill_inactive { background: #2a2a2a; border: 1px solid #4a4a4a; color: #777777; }
+  .wlw_pill_dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .pill_active   .wlw_pill_dot { background: #7fdd7f; box-shadow: 0 0 4px #7fdd7f; }
+  .pill_inactive .wlw_pill_dot { background: #555; }
 
-  /* Type badges */
+  /* -- Type badges -- */
   .wlw_type_badge {
     display: inline-block; padding: 1px 7px; border-radius: 2px;
     font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
   }
-  .wlw_type_mac { background: #2a6496; color: #fff; }
-  .wlw_type_ip  { background: #5b5ea6; color: #fff; }
-  .wlw_type_int { background: #3c763d; color: #fff; }
+  .wlw_type_mac { background: #2a6496 !important; color: #fff !important; }
+  .wlw_type_ip  { background: #5b5ea6 !important; color: #fff !important; }
+  .wlw_type_int { background: #3c763d !important; color: #fff !important; }
 
-  /* Whitelist table */
+  /* -- Whitelist table -- */
   #wlw_entry_table { width: 100%; border-collapse: collapse; }
   #wlw_entry_table th {
     background: #32454E; color: #b3bdc2; font-size: 11px; font-weight: normal;
@@ -59,17 +61,17 @@
 
   .wlw_del_btn {
     background: #5c1a1a; border: 1px solid #8b2020; color: #e08080;
-    padding: 2px 10px; cursor: pointer; font-size: 11px; border-radius: 2px;
+    padding: 4px 16px; cursor: pointer; font-size: 12px; border-radius: 2px;
   }
   .wlw_del_btn:hover { background: #7a2020; color: #fff; }
 
-  /* Section labels */
+  /* -- Section labels -- */
   .wlw_section_label {
     color: #93b0bd; font-size: 11px; font-weight: bold;
     text-transform: uppercase; letter-spacing: 1px; padding: 10px 0 4px 0;
   }
 
-  /* Add entry inputs */
+  /* -- Add entry inputs -- */
   select.wlw_type_sel {
     background: #1e2d34; border: 1px solid #4a5f6a;
     color: #c0cdd2; padding: 3px 6px; font-size: 12px;
@@ -87,23 +89,38 @@
   }
   .wlw_add_btn:hover { background: #225066; color: #fff; }
 
-  /* Manual control */
-  .wlw_ctrl_bar { display: flex; align-items: center; gap: 10px; padding: 8px 4px; flex-wrap: wrap; }
+  /* -- Control buttons -- */
+  .wlw_ctrl_bar { display: flex; align-items: center; gap: 10px; padding: 6px 4px; flex-wrap: wrap; }
   .wlw_start_btn {
     background: #1a3d1a; border: 1px solid #3a7a3a; color: #7fdd7f;
-    padding: 5px 20px; cursor: pointer; font-size: 12px; font-weight: bold;
-    border-radius: 2px; letter-spacing: 0.5px;
+    padding: 4px 16px; cursor: pointer; font-size: 12px; font-weight: bold;
+    border-radius: 2px;
   }
   .wlw_start_btn:hover { background: #245c24; color: #fff; }
   .wlw_stop_btn {
     background: #3d1a1a; border: 1px solid #7a3a3a; color: #dd7f7f;
-    padding: 5px 20px; cursor: pointer; font-size: 12px; font-weight: bold;
-    border-radius: 2px; letter-spacing: 0.5px;
+    padding: 4px 16px; cursor: pointer; font-size: 12px; font-weight: bold;
+    border-radius: 2px;
   }
-  .wlw_stop_btn:hover { background: #5c2424; color: #fff; }
+  .wlw_stop_btn:hover { background: #5c3a24; color: #fff; }
+  .wlw_cron_enable_btn {
+    background: #1a3d1a; border: 1px solid #3a7a3a; color: #7fdd7f;
+    padding: 4px 16px; cursor: pointer; font-size: 12px; font-weight: bold;
+    border-radius: 2px;
+  }
+  .wlw_cron_enable_btn:hover  { background: #245c24; color: #fff; }
+  .wlw_cron_disable_btn {
+    background: #3d1a1a; border: 1px solid #7a5a3a; color: #dd7f7f;
+    padding: 4px 16px; cursor: pointer; font-size: 12px; font-weight: bold;
+    border-radius: 2px;
+  }
+  .wlw_cron_disable_btn:hover { background: #5c3a24; color: #fff; }
 
-  .wlw_hint { color: #7a9aaa; font-size: 11px; margin-top: 4px; }
+  .wlw_hint { color: #7a9aaa; font-size: 11px; margin-top: 3px; }
   .wlw_empty_row td { color: #556a76; font-style: italic; text-align: center; padding: 12px; }
+
+  /* -- FormTable th alignment helper -- */
+  .wlw_th_mid { vertical-align: middle !important; }
 </style>
 
 <script type="text/javascript" language="JavaScript">
@@ -116,7 +133,7 @@ function initial() {
   show_menu();
   loadSettings();
   renderTable();
-  updateStatusPill();
+  updatePills();
 }
 
 function SetCurrentPage() {
@@ -124,25 +141,30 @@ function SetCurrentPage() {
   document.form.current_page.value = window.location.pathname.substring(1);
 }
 
-/* Status pill 
-   wlw_active is written by wl_window.sh into custom_settings.txt
-   on every start/stop. "1" = active, anything else = inactive.   */
-function updateStatusPill() {
-  var pill  = document.getElementById('wlw_status_pill');
-  var label = document.getElementById('wlw_status_label');
-  var active = (custom_settings.wlw_active === "1");
-  pill.className  = active ? 'pill_active' : 'pill_inactive';
-  label.innerHTML = active ? 'ACTIVE' : 'INACTIVE';
+/* -- Pills -------------------------------------------------------
+   wlw_active      "1" = firewall block is live
+   wlw_cron_active "1" = cron jobs are installed                 */
+function makePill(id, active, labelOn, labelOff) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'wlw_pill ' + (active ? 'pill_active' : 'pill_inactive');
+  el.innerHTML = '<span class="wlw_pill_dot"></span>' +
+                 '<span>' + (active ? labelOn : labelOff) + '</span>';
 }
 
-/* Load settings */
+function updatePills() {
+  makePill('wlw_fw_pill',   custom_settings.wlw_active      === "1", 'BLOCK ACTIVE',   'BLOCK INACTIVE');
+  makePill('wlw_cron_pill', custom_settings.wlw_cron_active === "1", 'SCHEDULE ON',    'SCHEDULE OFF');
+}
+
+/* -- Load settings -----------------------------------------------*/
 function loadSettings() {
   if (custom_settings.wlw_entries !== undefined && custom_settings.wlw_entries !== "") {
     try { wlw_entries = JSON.parse(custom_settings.wlw_entries); }
     catch(e) { wlw_entries = []; }
   } else {
     wlw_entries = [
-      { type:"mac", value:"AA:BB:CC:DD:EE:FF" },
+      { type:"mac", value:"aa:bb:cc:dd:ee:ff" },
       { type:"mac", value:"11:22:33:44:55:66" },
       { type:"int", value:"wl0.1" },
       { type:"int", value:"wl0.2" },
@@ -157,9 +179,7 @@ function loadSettings() {
   if (custom_settings.wlw_end_mm   !== undefined) document.getElementById('wlw_end_mm').value   = custom_settings.wlw_end_mm;
 }
 
-/* Pack custom_settings into amng_custom before any submit 
-   This must be called before every form submit so Merlin persists
-   the current state regardless of which button was pressed.       */
+/* -- Pack settings before every submit --------------------------*/
 function packSettings() {
   custom_settings.wlw_entries  = JSON.stringify(wlw_entries);
   custom_settings.wlw_start_hh = document.getElementById('wlw_start_hh').value;
@@ -169,31 +189,36 @@ function packSettings() {
   document.getElementById('amng_custom').value = JSON.stringify(custom_settings);
 }
 
-/* Apply / Save */
-function applySettings() {
+function submitAction(script, wait) {
   packSettings();
-  document.form.action_script.value = "restart_wlwindow";
-  document.form.action_wait.value   = "5";
+  document.form.action_script.value = script;
+  document.form.action_wait.value   = String(wait);
   showLoading();
   document.form.submit();
 }
 
-/* Manual start / stop 
-   action_script = "restart_wlwindow_start" means Merlin calls:
-     /jffs/scripts/service-event restart wlwindow_start
-   action_script = "restart_wlwindow_stop" means Merlin calls:
-     /jffs/scripts/service-event restart wlwindow_stop           */
+/* -- Apply / Save ------------------------------------------------*/
+function applySettings() {
+  submitAction("restart_wlwindow", 5);
+}
+
+/* -- Firewall manual control -------------------------------------*/
 function manualControl(action) {
   var label = (action === 'start') ? 'activate' : 'deactivate';
-  if (!confirm("Manually " + label + " the block now?")) return;
-  packSettings();
-  document.form.action_script.value = "restart_wlwindow_" + action;
-  document.form.action_wait.value   = "3";
-  showLoading();
-  document.form.submit();
+  if (!confirm("Manually " + label + " the firewall block now?")) return;
+  submitAction("restart_wlwindow_" + action, 3);
 }
 
-/* Render whitelist table */
+/* -- Cron toggle -------------------------------------------------
+   restart_wlwindow_cron_enable  ? service-event restart wlwindow_cron_enable
+   restart_wlwindow_cron_disable ? service-event restart wlwindow_cron_disable */
+function cronControl(action) {
+  var label = (action === 'enable') ? 'enable' : 'disable';
+  if (!confirm("Are you sure you want to " + label + " the schedule?")) return;
+  submitAction("restart_wlwindow_" + action, 3);
+}
+
+/* -- Render whitelist table --------------------------------------*/
 function renderTable() {
   var tbody = document.getElementById('wlw_tbody');
   tbody.innerHTML = "";
@@ -201,7 +226,7 @@ function renderTable() {
   if (wlw_entries.length === 0) {
     var tr = document.createElement('tr');
     tr.className = 'wlw_empty_row';
-    tr.innerHTML = '<td colspan="3">No entries‚ use the form below to add MACs, IPs, or interfaces.</td>';
+    tr.innerHTML = '<td colspan="3">No entries � use the form below to add MACs, IPs, or interfaces.</td>';
     tbody.appendChild(tr);
     return;
   }
@@ -221,14 +246,14 @@ function renderTable() {
     tr.innerHTML =
       '<td style="width:70px;">' + badge + '</td>' +
       '<td style="font-family:monospace;">' + escapeHtml(entry.value) + '</td>' +
-      '<td style="width:70px;text-align:right;">' +
+      '<td style="width:80px;text-align:right;">' +
         '<button class="wlw_del_btn" onclick="deleteEntry(' + realIdx + ');return false;">Remove</button>' +
       '</td>';
     tbody.appendChild(tr);
   }
 }
 
-/* Add entry */
+/* -- Add / delete entry ------------------------------------------*/
 function addEntry() {
   var type  = document.getElementById('wlw_new_type').value;
   var value = document.getElementById('wlw_new_value').value.trim().toLowerCase();
@@ -253,14 +278,13 @@ function addEntry() {
   renderTable();
 }
 
-/*  Delete entry */
 function deleteEntry(idx) {
   if (!confirm('Remove "' + wlw_entries[idx].value + '" from the whitelist?')) return;
   wlw_entries.splice(idx, 1);
   renderTable();
 }
 
-/*  Utility */
+/* -- Utility -----------------------------------------------------*/
 function escapeHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
@@ -307,28 +331,32 @@ function wlw_keydown(e) {
       <td bgcolor="#4D595D" colspan="3" valign="top">
 
         <div>&nbsp;</div>
-
-        <!-- Title + status pill -->
-        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
-          <span class="formfonttitle">Whitelist Window &mdash; Internet Access Scheduler</span>
-          <span id="wlw_status_pill" class="pill_inactive">
-            <span id="wlw_status_dot"></span>
-            <span id="wlw_status_label">INACTIVE</span>
-          </span>
-        </div>
-
+        <div class="formfonttitle">Whitelist Window &mdash; Internet Access Scheduler</div>
         <div style="margin:10px 0 10px 5px;" class="splitLine"></div>
         <div class="formfontdesc">
           Blocks all internet access outside the scheduled window, except for whitelisted
-          MACs, IPs, and interfaces. Settings are stored in
-          <code>/jffs/addons/custom_settings.txt</code> and override the script's
-          built-in defaults at runtime.
+          MACs, IPs, and interfaces. You can manually enable/disable the schedule or the block.
         </div>
 
-        <!-- SCHEDULE -->
-        <div class="wlw_section_label" style="margin-top:16px;">Block Schedule</div>
+        <!-- ----------- SCHEDULE / CRON CONTROL -------------------- -->
+        <div class="wlw_section_label" style="margin-top:20px;">Schedule (Cron)</div>
         <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0"
                bordercolor="#6b8fa3" class="FormTable">
+          <tr>
+            <th style="width:160px;" class="wlw_th_mid">
+              <div style="margin-top:5px;">
+                <span id="wlw_cron_pill" class="wlw_pill pill_inactive">
+                  <span class="wlw_pill_dot"></span><span>SCHEDULE OFF</span>
+                </span>
+              </div>
+            </th>
+            <td>
+              <div class="wlw_ctrl_bar">
+                <button class="wlw_cron_enable_btn"  onclick="cronControl('cron_enable');return false;">&#9654;&nbsp;Enable Schedule</button>
+                <button class="wlw_cron_disable_btn" onclick="cronControl('cron_disable');return false;">&#9632;&nbsp;Disable Schedule</button>
+              </div>
+            </td>
+          </tr>
           <tr>
             <th style="width:160px;">Block Start (HH:MM)</th>
             <td>
@@ -337,7 +365,7 @@ function wlw_keydown(e) {
               &nbsp;:&nbsp;
               <input type="text" id="wlw_start_mm" maxlength="2" class="input_6_table"
                      value="00" style="width:38px;text-align:center;" autocorrect="off">
-              <span class="wlw_hint">&nbsp;24-hour‚ block activates at this time nightly</span>
+              <span class="wlw_hint">&nbsp;24-hour � block activates at this time nightly</span>
             </td>
           </tr>
           <tr>
@@ -348,42 +376,61 @@ function wlw_keydown(e) {
               &nbsp;:&nbsp;
               <input type="text" id="wlw_end_mm" maxlength="2" class="input_6_table"
                      value="00" style="width:38px;text-align:center;" autocorrect="off">
-              <span class="wlw_hint">&nbsp;24-hour‚ block is lifted at this time</span>
+              <span class="wlw_hint">&nbsp;24-hour � block is lifted at this time</span>
+            </td>
+          </tr>
+          <tr>
+            <th style="width:160px;" class="wlw_th_mid">
+              <div style="margin-top:5px;">
+                <span id="wlw_fw_pill" class="wlw_pill pill_inactive">
+                  <span class="wlw_pill_dot"></span><span>BLOCK INACTIVE</span>
+                </span>
+              </div>
+            </th>
+            <td>
+              <div class="wlw_ctrl_bar">
+                <button class="wlw_start_btn" onclick="manualControl('start');return false;">&#9654;&nbsp;Activate Block</button>
+                <button class="wlw_stop_btn"  onclick="manualControl('stop');return false;">&#9632;&nbsp;Deactivate Block</button>
+              </div>
             </td>
           </tr>
         </table>
 
-        <!-- WHITELIST TABLE -->
+        <!-- ----------- WHITELIST TABLE ---------------------------- -->
         <div class="wlw_section_label" style="margin-top:20px;">Whitelisted Entries</div>
-        <table width="100%" border="1" align="center" cellpadding="0" cellspacing="0"
-               bordercolor="#6b8fa3" class="FormTable">
+        <table id="wlw_entry_table" width="100%" border="1" align="center" cellpadding="0" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="table-layout: fixed;">
+          <thead>
+            <tr>
+              <th style="width:10%; padding:8px 10px; text-align:center;">Type</th>
+              <th style="width:80%; padding:8px 10px; text-align:center;">Value</th>
+              <th style="width:10%; padding:8px 10px; text-align:center;">Action</th>
+            </tr>
+          </thead>
+
+          <tbody id="wlw_tbody">
+            <!-- Entries will be injected here -->
+          </tbody>
+
           <tr>
-            <td colspan="2" style="padding:0;">
-              <table id="wlw_entry_table">
-                <thead>
-                  <tr>
-                    <th style="width:70px;">Type</th>
-                    <th>Value</th>
-                    <th style="width:70px;text-align:right;">Action</th>
-                  </tr>
-                </thead>
-                <tbody id="wlw_tbody"></tbody>
-              </table>
+            <td style="padding:8px 10px;">
+              <select id="wlw_new_type" class="wlw_type_sel" style="width:100%;">
+                <option value="mac">MAC</option>
+                <option value="ip">IP</option>
+                <option value="int">IFACE</option>
+              </select>
+            </td>
+            <td style="padding:8px 10px;">
+              <input type="text" id="wlw_new_value" class="wlw_value_input"
+                    placeholder="e.g. aa:bb:cc:dd:ee:ff, 192.168.1.40, wl0.1, eth5..."
+                    autocorrect="off" autocapitalize="off" autocomplete="off"
+                    onkeydown="wlw_keydown(event);" style="width:100%; box-sizing: border-box;">
+            </td>
+            <td style="padding:8px 10px; text-align:center;">
+              <button class="wlw_add_btn" onclick="addEntry();return false;">Add</button>
             </td>
           </tr>
           <tr>
-            <th style="width:160px;">Add Entry</th>
-            <td style="padding:8px 10px;">
-              <select id="wlw_new_type" class="wlw_type_sel">
-                <option value="mac">MAC Address</option>
-                <option value="ip">IP Address</option>
-                <option value="int">Interface</option>
-              </select>
-              <input type="text" id="wlw_new_value" class="wlw_value_input"
-                     placeholder="e.g. aa:bb:cc:dd:ee:ff  /  192.168.1.x  /  wl0.2"
-                     autocorrect="off" autocapitalize="off" autocomplete="off"
-                     onkeydown="wlw_keydown(event);">
-              <button class="wlw_add_btn" onclick="addEntry();return false;">+ Add</button>
+            <td colspan="3" style="padding:8px 10px; text-align:center;">
               <div class="wlw_hint">
                 MAC: <code>xx:xx:xx:xx:xx:xx</code> &nbsp;|&nbsp;
                 IP: IPv4 or IPv6 &nbsp;|&nbsp;
@@ -392,24 +439,7 @@ function wlw_keydown(e) {
             </td>
           </tr>
         </table>
-
-        <!-- MANUAL CONTROL -->
-        <div class="wlw_section_label" style="margin-top:20px;">Manual Control</div>
-        <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0"
-               bordercolor="#6b8fa3" class="FormTable">
-          <tr>
-            <th style="width:160px;">Firewall Block</th>
-            <td>
-              <div class="wlw_ctrl_bar">
-                <button class="wlw_start_btn" onclick="manualControl('start');return false;">&#9654;&nbsp;Activate Block</button>
-                <button class="wlw_stop_btn"  onclick="manualControl('stop');return false;">&#9632;&nbsp;Deactivate Block</button>
-                <span class="wlw_hint">Takes effect immediately. Reload the page after to see updated status.</span>
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        <!--  APPLY  -->
+        <!-- ----------- APPLY --------------------------------------- -->
         <div class="apply_gen">
           <input name="button" type="button" class="button_gen"
                  onclick="applySettings();" value="Apply" />

@@ -43,6 +43,87 @@ if [ "$EVENT" = "wlwindow_stop" ]; then
     exit 0
 fi
 
+# Manual start
+if [ "$EVENT" = "wlwindow_cron_enable" ]; then
+    logger "wl_window" "Manual start triggered from webui."
+    sh "$SCRIPT" cron_enable
+    exit 0
+fi
+
+# Manual stop
+if [ "$EVENT" = "wlwindow_cron_disable" ]; then
+    logger "wl_window" "Manual stop triggered from webui."
+    sh "$SCRIPT" cron_disable
+    exit 0
+fi
+
+[ "$EVENT" != "wlwindow" ] && exit 0
+
+# Apply / save settings
+# Merlin has already written all amng_custom fields into SETTINGS as
+# plain "key value" lines before service-event is called. wlw_entries
+# is already there; wl_window.sh reads and parses it directly.
+# Reload settings, reinstall cron with new times, and hot-reload firewall if active.
+
+logger "wl_window" "Applying settings from webui..."
+
+# Reinstall cron jobs with new schedule times
+# sh "$SCRIPT" install_cron
+
+if iptables -L FORWARD 2>/dev/null | grep -q "WL_WINDOW"; then
+    logger "wl_window" "Block is active – reloading rules with new settings."
+    sh "$SCRIPT" start
+fi
+
+# Clean up legacy flat keys if they exist from a previous version
+sed -i '/^wlw_macs /d;/^wlw_ips /d;/^wlw_ints /d' "$SETTINGS" 2>/dev/null
+
+logger "wl_window" "Done."
+#!/bin/sh
+# wlwindow_service.sh
+# Called by /jffs/scripts/service-event
+#
+# Merlin calls this as:  service-event restart wlwindow
+#                        service-event restart wlwindow_start
+#                        service-event restart wlwindow_stop
+#
+# $1 = "restart"  $2 = event name (everything after "restart_" in action_script)
+#
+# Place at: /jffs/addons/wl_window/wlwindow_service.sh
+
+TYPE="$1"
+EVENT="$2"
+
+ADDON_DIR="/jffs/addons/wl_window"
+SCRIPT="$ADDON_DIR/wl_window.sh"
+SETTINGS="/jffs/addons/custom_settings.txt"
+
+[ "$TYPE" != "restart" ] && exit 0
+
+cfg_set() {
+    _k="$1"; _v="$2"
+    touch "$SETTINGS"
+    if grep -q "^$_k " "$SETTINGS" 2>/dev/null; then
+        sed -i "s|^$_k .*|$_k $_v|" "$SETTINGS"
+    else
+        echo "$_k $_v" >> "$SETTINGS"
+    fi
+}
+
+# Manual start
+if [ "$EVENT" = "wlwindow_start" ]; then
+    logger "wl_window" "Manual start triggered from webui."
+    sh "$SCRIPT" start
+    exit 0
+fi
+
+# Manual stop
+if [ "$EVENT" = "wlwindow_stop" ]; then
+    logger "wl_window" "Manual stop triggered from webui."
+    sh "$SCRIPT" stop
+    exit 0
+fi
+
 [ "$EVENT" != "wlwindow" ] && exit 0
 
 # Apply / save settings

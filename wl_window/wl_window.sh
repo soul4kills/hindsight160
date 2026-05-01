@@ -110,7 +110,7 @@ uninstall_cron() {
 }
 
 apply_block() {
-    # Tear down any existing rules first (silently — no status write mid-flight)
+    # Tear down any existing rules first (silently â€” no status write mid-flight)
     iptables  -D FORWARD -j "$CHAIN" 2>/dev/null
     iptables  -F "$CHAIN" 2>/dev/null
     iptables  -X "$CHAIN" 2>/dev/null
@@ -147,7 +147,7 @@ apply_block() {
     ip6tables -I FORWARD 1 -j "$CHAIN"
     conntrack -F 2>/dev/null
 
-    logger "wl_window" "Block ACTIVE — whitelisted devices/interfaces bypassed."
+    logger "wl_window" "Block ACTIVE â€” whitelisted devices/interfaces bypassed."
     echo "[+] Whitelist Active: All authorized devices/interfaces bypass the block."
 
     # Write active flag for webui status pill, then snapshot status
@@ -173,7 +173,7 @@ remove_block() {
 }
 
 show_status() {
-    echo "=== Whitelist Window — Dual-Stack Status ==="
+    echo "=== Whitelist Window â€” Dual-Stack Status ==="
     echo ""
     echo "Config  : $([ -f "$SETTINGS" ] && echo "$SETTINGS" || echo "built-in defaults")"
     echo "Schedule: ON at ${START_HH}:${START_MM}, OFF at ${END_HH}:${END_MM}"
@@ -210,7 +210,7 @@ install_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" install
     else
-        echo "[!] wl_window_install.sh not found — skipping webui install."
+        echo "[!] wl_window_install.sh not found â€” skipping webui install."
     fi
 
     # 3. Ensure cron survives reboot via services-start
@@ -224,6 +224,16 @@ install_script() {
         printf "#!/bin/sh\nsh %s install\n" "$SCRIPT" > "$SERVICES_START"
         chmod 755 "$SERVICES_START"
     fi
+
+    _cron_active=$(cfg_get wlw_cron_active)
+
+    if [ "$_cron_active" = "1" ]; then
+        echo "[*] wlw_cron_active=1, installing cron schedule..."
+        install_cron
+    else
+        echo "[*] wlw_cron_active=$_cron_active, skipping cron installation."
+    fi
+
     chmod 755 /jffs/addons/wl_window/*.sh
     echo "[+] Whitelist Window fully installed."
 }
@@ -250,7 +260,7 @@ uninstall_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" uninstall
     else
-        echo "[!] wl_window_install.sh not found — skipping webui teardown."
+        echo "[!] wl_window_install.sh not found â€” skipping webui teardown."
     fi
 
     # 4. Clean up all wlw_* keys from shared custom_settings.txt
@@ -346,8 +356,7 @@ case "$1" in
     install)   install_script ;;
     uninstall) uninstall_script ;;
     manage)    manage_list "$2" "$3" "$4" ;;
-    install_cron) install_cron ;;
     cron_enable) install_cron ;;
     cron_disable) uninstall_cron ;;
-    *)         echo "Usage: $0 {start|stop|status|install|uninstall|manage|install_cron|activate_cron|deactivate_cron}" ;;
+    *)         echo "Usage: $0 {start|stop|status|install|uninstall|manage|cron_enable|cron_disable}" ;;
 esac

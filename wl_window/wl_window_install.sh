@@ -29,7 +29,7 @@ install_addon() {
     # Find an available webui mount point
     am_get_webui_page "$ASP_SRC"
     if [ "$am_webui_page" = "none" ]; then
-        logger "$ADDON_TAG" "No available webui mount point â€” too many addons installed."
+        logger "$ADDON_TAG" "No available webui mount point Ã¢â‚¬â€ too many addons installed."
         exit 5
     fi
     logger "$ADDON_TAG" "Mounting WL_Window.asp as $am_webui_page"

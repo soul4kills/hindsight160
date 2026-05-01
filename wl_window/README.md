@@ -47,7 +47,7 @@ The router may reboot or continue; after that, the `/jffs` overlay filesystem wi
 
 ## 2. Install Whitelist Window addon
 
-Connect to your router via SSH (e.g., using `ssh admin@192.168.1.1`), then run:
+Connect to your router via SSH (e.g., using `ssh admin@192.168.1.1`), then run this one-liner:
 
 ```sh
 mkdir -p /jffs/addons/wl_window && \

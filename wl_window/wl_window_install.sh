@@ -29,7 +29,7 @@ install_addon() {
     # Find an available webui mount point
     am_get_webui_page "$ASP_SRC"
     if [ "$am_webui_page" = "none" ]; then
-        logger "$ADDON_TAG" "No available webui mount pointâ€š too many addons installed."
+        logger "$ADDON_TAG" "No available webui mount point too many addons installed."
         exit 5
     fi
     logger "$ADDON_TAG" "Mounting WL_Window.asp as $am_webui_page"
@@ -42,10 +42,10 @@ install_addon() {
         cp /www/require/modules/menuTree.js /tmp/
         mount -o bind /tmp/menuTree.js /www/require/modules/menuTree.js
     fi
-    # ParentalControl.asp
-    # Tools_OtherSettings.asp
+    # ParentalControl.asp / Parental Controls Menu
+    # Tools_OtherSettings.asp / Administration Tools Menu
 
-    # Insert tab after "Other Settings" in the Tools menu
+    # Insert tab after "Parental Controls" in the Tools menu
     sed -i "/url: \"ParentalControl.asp\", tabName:/a {url: \"$am_webui_page\", tabName: \"WL Window\"}," \
         /tmp/menuTree.js
 

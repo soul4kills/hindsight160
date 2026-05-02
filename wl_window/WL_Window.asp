@@ -491,8 +491,10 @@ function wlw_keydown(e) {
         <div class="formfonttitle">Whitelist Window &mdash; Internet Access Scheduler</div>
         <div style="margin:10px 0 10px 5px;" class="splitLine"></div>
         <div class="formfontdesc">
-          Blocks all internet access inside the scheduled window, except for whitelisted
+          Blocks all internet access insdie the scheduled window, except for whitelisted
           MACs, IPs, and interfaces. You can manually enable/disable the schedule or the block.
+          <br><br>
+          The main purpose of this addon/script is to prevent access bypassing by mac randomization.
           <br><br>
           Use Block persistence with caution. Only use it if rebooting the router to bypass the block is an actual concern.
         </div>

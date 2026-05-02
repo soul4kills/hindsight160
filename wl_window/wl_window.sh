@@ -248,11 +248,11 @@ install_script() {
     # Handles block persistence on reboots - use with caution
     _persist_active=$(cfg_get wlw_persist)
 
-    if [ "$_persist_active" = "0" ]; then
-        echo "[*] wlw_persist=$_cron_active, Block persistence inactive."
-    else
+    if [ "$_persist_active" = "1" ]; then
         echo "[*] wlw_persist=1, Block persistence active..."
         apply_block
+    else
+        echo "[*] wlw_persist=$_cron_active, Block persistence inactive."
     fi
 
     chmod 755 /jffs/addons/wl_window/*.sh

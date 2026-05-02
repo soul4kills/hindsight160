@@ -383,3 +383,4 @@ case "$1" in
     persist_disable) persist_off ;;
     *)         echo "Usage: $0 {start|stop|status|install|uninstall|manage|cron_enable|cron_disable|persist_enable|persist_disable}" ;;
 esac
+exit 0

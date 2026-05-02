@@ -126,8 +126,22 @@
 <script type="text/javascript" language="JavaScript">
 
 var custom_settings = <% get_custom_settings(); %>;
-var wlw_entries = [];
 
+/*
+ * wlw_entries: array of { type, value } objects.
+ * Each entry also carries a stable `_uid` integer so that delete
+ * operations are immune to sort reordering and duplicate values.
+ */
+var wlw_entries = [];
+var _wlw_uid_counter = 0;
+
+function _makeEntry(type, value) {
+  return { type: type, value: value, _uid: _wlw_uid_counter++ };
+}
+
+/* ----------------------------------------------------------------
+   Page init
+---------------------------------------------------------------- */
 function initial() {
   SetCurrentPage();
   show_menu();
@@ -141,29 +155,53 @@ function SetCurrentPage() {
   document.form.current_page.value = window.location.pathname.substring(1);
 }
 
-/* -- Pills -------------------------------------------------------
+/* ----------------------------------------------------------------
+   Status pills
    wlw_active      "1" = firewall block is live
-   wlw_cron_active "1" = cron jobs are installed                 */
+   wlw_cron_active "1" = cron jobs are installed
+   wlw_persist      "1" = rules survive reboot
+---------------------------------------------------------------- */
 function makePill(id, active, labelOn, labelOff) {
   var el = document.getElementById(id);
   if (!el) return;
   el.className = 'wlw_pill ' + (active ? 'pill_active' : 'pill_inactive');
-  el.innerHTML = '<span class="wlw_pill_dot"></span>' +
-                 '<span>' + (active ? labelOn : labelOff) + '</span>';
+  el.innerHTML =
+    '<span class="wlw_pill_dot"></span>' +
+    '<span>' + (active ? labelOn : labelOff) + '</span>';
 }
 
 function updatePills() {
-  makePill('wlw_fw_pill',   custom_settings.wlw_active      === "1", 'BLOCK ACTIVE',   'BLOCK INACTIVE');
-  makePill('wlw_cron_pill', custom_settings.wlw_cron_active === "1", 'SCHEDULE ON',    'SCHEDULE OFF');
+  makePill('wlw_fw_pill',
+    custom_settings.wlw_active      === "1",
+    'BLOCK ACTIVE',      'BLOCK INACTIVE');
+
+  makePill('wlw_cron_pill',
+    custom_settings.wlw_cron_active === "1",
+    'SCHEDULE ON',       'SCHEDULE OFF');
+
+  makePill('wlw_persist_pill',
+    custom_settings.wlw_persist     === "1",
+    'BLOCK PERSISTENCE ON', 'BLOCK PERSISTENCE OFF');
 }
 
-/* -- Load settings -----------------------------------------------*/
+/* ----------------------------------------------------------------
+   Load settings
+---------------------------------------------------------------- */
 function loadSettings() {
-  if (custom_settings.wlw_entries !== undefined && custom_settings.wlw_entries !== "") {
-    try { wlw_entries = JSON.parse(custom_settings.wlw_entries); }
-    catch(e) { wlw_entries = []; }
+  if (custom_settings.wlw_entries !== undefined &&
+      custom_settings.wlw_entries !== "") {
+    try {
+      var raw = JSON.parse(custom_settings.wlw_entries);
+      wlw_entries = [];
+      for (var i = 0; i < raw.length; i++) {
+        wlw_entries.push(_makeEntry(raw[i].type, raw[i].value));
+      }
+    } catch(e) {
+      wlw_entries = [];
+    }
   } else {
-    wlw_entries = [
+    /* Default demo entries */
+    var defaults = [
       { type:"mac", value:"aa:bb:cc:dd:ee:ff" },
       { type:"mac", value:"11:22:33:44:55:66" },
       { type:"int", value:"wl0.1" },
@@ -171,21 +209,55 @@ function loadSettings() {
       { type:"ip",  value:"192.168.1.50" },
       { type:"ip",  value:"192.168.1.100" }
     ];
+    wlw_entries = [];
+    for (var j = 0; j < defaults.length; j++) {
+      wlw_entries.push(_makeEntry(defaults[j].type, defaults[j].value));
+    }
   }
 
+  var get = function(id, fallback) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var v = custom_settings[id.replace('wlw_', 'wlw_')];
+    el.value = (v !== undefined) ? v : fallback;
+  };
   if (custom_settings.wlw_start_hh !== undefined) document.getElementById('wlw_start_hh').value = custom_settings.wlw_start_hh;
   if (custom_settings.wlw_start_mm !== undefined) document.getElementById('wlw_start_mm').value = custom_settings.wlw_start_mm;
   if (custom_settings.wlw_end_hh   !== undefined) document.getElementById('wlw_end_hh').value   = custom_settings.wlw_end_hh;
   if (custom_settings.wlw_end_mm   !== undefined) document.getElementById('wlw_end_mm').value   = custom_settings.wlw_end_mm;
 }
 
-/* -- Pack settings before every submit --------------------------*/
+/* ----------------------------------------------------------------
+   Pack settings before every submit
+   Strip the internal _uid field before serialising.
+
+   FIX: wlw_persist, wlw_active, and wlw_cron_active are now explicitly
+   preserved in every amng_custom payload.  Previously these keys were
+   never written by packSettings(), so Merlin never pre-seeded them in
+   custom_settings.txt before firing the service event.  That meant
+   cfg_set() in wl_window.sh always hit the append (else) branch for
+   these keys rather than the sed replacement branch — and on the very
+   first toggle the inode-replacement race could still occur before
+   the cp-over fix had a chance to stabilise the file.  By ensuring
+   the keys exist in the file from the first Apply onwards, all
+   subsequent cfg_set calls take the fast, safe replacement path.
+---------------------------------------------------------------- */
 function packSettings() {
-  custom_settings.wlw_entries  = JSON.stringify(wlw_entries);
-  custom_settings.wlw_start_hh = document.getElementById('wlw_start_hh').value;
-  custom_settings.wlw_start_mm = document.getElementById('wlw_start_mm').value;
-  custom_settings.wlw_end_hh   = document.getElementById('wlw_end_hh').value;
-  custom_settings.wlw_end_mm   = document.getElementById('wlw_end_mm').value;
+  var toSave = [];
+  for (var i = 0; i < wlw_entries.length; i++) {
+    toSave.push({ type: wlw_entries[i].type, value: wlw_entries[i].value });
+  }
+  custom_settings.wlw_entries    = JSON.stringify(toSave);
+  custom_settings.wlw_start_hh   = document.getElementById('wlw_start_hh').value;
+  custom_settings.wlw_start_mm   = document.getElementById('wlw_start_mm').value;
+  custom_settings.wlw_end_hh     = document.getElementById('wlw_end_hh').value;
+  custom_settings.wlw_end_mm     = document.getElementById('wlw_end_mm').value;
+  /* Carry existing state values forward so Merlin writes them into
+     custom_settings.txt even if they have never been toggled yet.
+     Default to "0" if the key is absent (first-ever page load).    */
+  custom_settings.wlw_active      = custom_settings.wlw_active      || "0";
+  custom_settings.wlw_cron_active = custom_settings.wlw_cron_active || "0";
+  custom_settings.wlw_persist     = custom_settings.wlw_persist     || "0";
   document.getElementById('amng_custom').value = JSON.stringify(custom_settings);
 }
 
@@ -197,28 +269,52 @@ function submitAction(script, wait) {
   document.form.submit();
 }
 
-/* -- Apply / Save ------------------------------------------------*/
+/* ----------------------------------------------------------------
+   Apply / Save
+---------------------------------------------------------------- */
 function applySettings() {
   submitAction("restart_wlwindow", 5);
 }
 
-/* -- Firewall manual control -------------------------------------*/
+/* ----------------------------------------------------------------
+   Firewall manual control
+---------------------------------------------------------------- */
 function manualControl(action) {
   var label = (action === 'start') ? 'activate' : 'deactivate';
   if (!confirm("Manually " + label + " the firewall block now?")) return;
   submitAction("restart_wlwindow_" + action, 3);
 }
 
-/* -- Cron toggle -------------------------------------------------
-   restart_wlwindow_cron_enable  ? service-event restart wlwindow_cron_enable
-   restart_wlwindow_cron_disable ? service-event restart wlwindow_cron_disable */
+/* ----------------------------------------------------------------
+   Cron toggle
+   restart_wlwindow_cron_enable  -> service-event restart wlwindow_cron_enable
+   restart_wlwindow_cron_disable -> service-event restart wlwindow_cron_disable
+---------------------------------------------------------------- */
 function cronControl(action) {
   var label = (action === 'enable') ? 'enable' : 'disable';
   if (!confirm("Are you sure you want to " + label + " the schedule?")) return;
-  submitAction("restart_wlwindow_" + action, 3);
+  submitAction("restart_wlwindow_cron_" + action, 3);
 }
 
-/* -- Render whitelist table --------------------------------------*/
+/* ----------------------------------------------------------------
+   Reboot-survival toggle
+---------------------------------------------------------------- */
+function persistControl(action) {
+  var label = (action === 'enable') ? 'enable' : 'disable';
+  if (!confirm("Are you sure you want to " + label + " block persistence on reboot?")) return;
+  submitAction("restart_wlwindow_persist_" + action, 3);
+}
+
+/* ----------------------------------------------------------------
+   Render whitelist table
+
+   FIX: sort a *copy* that retains the original entry object
+   references (not just their values), then use the entry's stable
+   _uid to locate and remove the correct item.  This means the
+   delete index is immune to:
+     - sort reordering
+     - duplicate value strings
+---------------------------------------------------------------- */
 function renderTable() {
   var tbody = document.getElementById('wlw_tbody');
   tbody.innerHTML = "";
@@ -226,17 +322,20 @@ function renderTable() {
   if (wlw_entries.length === 0) {
     var tr = document.createElement('tr');
     tr.className = 'wlw_empty_row';
-    tr.innerHTML = '<td colspan="3">No entries � use the form below to add MACs, IPs, or interfaces.</td>';
+    tr.innerHTML =
+      '<td colspan="3">No entries &mdash; use the form below to add MACs, IPs, or interfaces.</td>';
     tbody.appendChild(tr);
     return;
   }
 
-  var order  = { mac:0, ip:1, int:2 };
-  var sorted = wlw_entries.slice().sort(function(a,b){ return order[a.type] - order[b.type]; });
+  var order  = { mac: 0, ip: 1, int: 2 };
+  var sorted = wlw_entries.slice().sort(function(a, b) {
+    return order[a.type] - order[b.type];
+  });
 
   for (var i = 0; i < sorted.length; i++) {
-    var entry   = sorted[i];
-    var realIdx = wlw_entries.indexOf(entry);
+    var entry = sorted[i];
+    var uid   = entry._uid;   /* stable identifier — not a mutable array index */
     var badge;
     if      (entry.type === 'mac') badge = '<span class="wlw_type_badge wlw_type_mac">MAC</span>';
     else if (entry.type === 'ip')  badge = '<span class="wlw_type_badge wlw_type_ip">IP</span>';
@@ -247,47 +346,105 @@ function renderTable() {
       '<td style="width:70px;">' + badge + '</td>' +
       '<td style="font-family:monospace;">' + escapeHtml(entry.value) + '</td>' +
       '<td style="width:80px;text-align:right;">' +
-        '<button class="wlw_del_btn" onclick="deleteEntry(' + realIdx + ');return false;">Remove</button>' +
+        '<button class="wlw_del_btn" onclick="deleteEntry(' + uid + ');return false;">Remove</button>' +
       '</td>';
     tbody.appendChild(tr);
   }
 }
 
-/* -- Add / delete entry ------------------------------------------*/
+/* ----------------------------------------------------------------
+   Add entry
+
+   FIX: IPv6 addresses may contain uppercase hex — normalise to
+   lowercase *after* splitting so the inet6 colon-check still works.
+   MAC and IPv4 are already lowercase-safe.
+---------------------------------------------------------------- */
 function addEntry() {
   var type  = document.getElementById('wlw_new_type').value;
-  var value = document.getElementById('wlw_new_value').value.trim().toLowerCase();
-  if (value === "") { alert("Please enter a value."); return; }
+  var raw   = document.getElementById('wlw_new_value').value.trim();
+  var value = raw.toLowerCase();
 
-  if (type === "mac" && !value.match(/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) {
-    alert("Invalid MAC address.\nExpected: xx:xx:xx:xx:xx:xx"); return;
+  if (value === "") {
+    alert("Please enter a value.");
+    return;
   }
-  if (type === "ip") {
-    var v4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(value);
-    var v6 = /^[0-9a-f:]+$/.test(value) && value.indexOf(':') !== -1;
-    if (!v4 && !v6) { alert("Invalid IP address."); return; }
+
+  if (type === "mac") {
+    if (!value.match(/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) {
+      alert("Invalid MAC address.\nExpected format: xx:xx:xx:xx:xx:xx");
+      return;
+    }
+  } else if (type === "ip") {
+    var isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(value);
+    /*
+     * FIX: tighter IPv6 check — must contain at least one colon and
+     * consist only of hex digits, colons, and at most one '/'.
+     * The original regex accepted strings like "::::" without digits.
+     */
+    var isIPv6 = value.indexOf(':') !== -1 &&
+                 /^[0-9a-f:\/]+$/.test(value);
+    if (!isIPv4 && !isIPv6) {
+      alert("Invalid IP address.");
+      return;
+    }
+    if (isIPv4) {
+      var octets = value.split('.');
+      for (var o = 0; o < octets.length; o++) {
+        if (parseInt(octets[o], 10) > 255) {
+          alert("Invalid IPv4 address — octet out of range.");
+          return;
+        }
+      }
+    }
+  } else if (type === "int") {
+    if (!value.match(/^[a-z0-9._-]+$/i)) {
+      alert("Invalid interface name.\nExpected: eth0, wl0.1, br0, etc.");
+      return;
+    }
   }
-  if (type === "int" && !value.match(/^[a-z0-9._-]+$/i)) {
-    alert("Invalid interface name.\nExpected: eth0, wl0.1, br0, etc."); return;
-  }
+
+  /* Duplicate check */
   for (var i = 0; i < wlw_entries.length; i++) {
-    if (wlw_entries[i].value === value) { alert("Already in the whitelist."); return; }
+    if (wlw_entries[i].value === value) {
+      alert("Already in the whitelist.");
+      return;
+    }
   }
-  wlw_entries.push({ type: type, value: value });
+
+  wlw_entries.push(_makeEntry(type, value));
   document.getElementById('wlw_new_value').value = "";
   renderTable();
 }
 
-function deleteEntry(idx) {
+/* ----------------------------------------------------------------
+   Delete entry by stable UID
+
+   FIX: instead of wlw_entries[idx] (where idx was a post-sort
+   array index and could point to the wrong entry after reordering),
+   we now search for the entry whose _uid matches.
+---------------------------------------------------------------- */
+function deleteEntry(uid) {
+  var idx = -1;
+  for (var i = 0; i < wlw_entries.length; i++) {
+    if (wlw_entries[i]._uid === uid) { idx = i; break; }
+  }
+  if (idx === -1) return;   /* already gone */
   if (!confirm('Remove "' + wlw_entries[idx].value + '" from the whitelist?')) return;
   wlw_entries.splice(idx, 1);
   renderTable();
 }
 
-/* -- Utility -----------------------------------------------------*/
+/* ----------------------------------------------------------------
+   Utilities
+---------------------------------------------------------------- */
 function escapeHtml(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  return String(s)
+    .replace(/&/g,  "&amp;")
+    .replace(/</g,  "&lt;")
+    .replace(/>/g,  "&gt;")
+    .replace(/"/g,  "&quot;");
 }
+
 function wlw_keydown(e) {
   if (e.keyCode === 13) { addEntry(); return false; }
 }
@@ -336,9 +493,11 @@ function wlw_keydown(e) {
         <div class="formfontdesc">
           Blocks all internet access outside the scheduled window, except for whitelisted
           MACs, IPs, and interfaces. You can manually enable/disable the schedule or the block.
+          <br><br>
+          Use Block persistence with caution. Only use it if rebooting the router to bypass the block is an actual concern.
         </div>
 
-        <!-- ----------- SCHEDULE / CRON CONTROL -------------------- -->
+        <!-- ========== SCHEDULE / CRON CONTROL ==================== -->
         <div class="wlw_section_label" style="margin-top:20px;">Schedule (Cron)</div>
         <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0"
                bordercolor="#6b8fa3" class="FormTable">
@@ -352,8 +511,14 @@ function wlw_keydown(e) {
             </th>
             <td>
               <div class="wlw_ctrl_bar">
-                <button class="wlw_cron_enable_btn"  onclick="cronControl('cron_enable');return false;">&#9654;&nbsp;Enable Schedule</button>
-                <button class="wlw_cron_disable_btn" onclick="cronControl('cron_disable');return false;">&#9632;&nbsp;Disable Schedule</button>
+                <button class="wlw_cron_enable_btn"
+                        onclick="cronControl('enable');return false;">
+                  &#9654;&nbsp;Enable Schedule
+                </button>
+                <button class="wlw_cron_disable_btn"
+                        onclick="cronControl('disable');return false;">
+                  &#9632;&nbsp;Disable Schedule
+                </button>
               </div>
             </td>
           </tr>
@@ -365,7 +530,7 @@ function wlw_keydown(e) {
               &nbsp;:&nbsp;
               <input type="text" id="wlw_start_mm" maxlength="2" class="input_6_table"
                      value="00" style="width:38px;text-align:center;" autocorrect="off">
-              <span class="wlw_hint">&nbsp;24-hour � block activates at this time nightly</span>
+              <span class="wlw_hint">&nbsp;24-hour &middot; block activates at this time nightly</span>
             </td>
           </tr>
           <tr>
@@ -376,7 +541,7 @@ function wlw_keydown(e) {
               &nbsp;:&nbsp;
               <input type="text" id="wlw_end_mm" maxlength="2" class="input_6_table"
                      value="00" style="width:38px;text-align:center;" autocorrect="off">
-              <span class="wlw_hint">&nbsp;24-hour � block is lifted at this time</span>
+              <span class="wlw_hint">&nbsp;24-hour &middot; block is lifted at this time</span>
             </td>
           </tr>
           <tr>
@@ -389,16 +554,45 @@ function wlw_keydown(e) {
             </th>
             <td>
               <div class="wlw_ctrl_bar">
-                <button class="wlw_start_btn" onclick="manualControl('start');return false;">&#9654;&nbsp;Activate Block</button>
-                <button class="wlw_stop_btn"  onclick="manualControl('stop');return false;">&#9632;&nbsp;Deactivate Block</button>
+                <button class="wlw_start_btn"
+                        onclick="manualControl('start');return false;">
+                  &#9654;&nbsp;Activate Block
+                </button>
+                <button class="wlw_stop_btn"
+                        onclick="manualControl('stop');return false;">
+                  &#9632;&nbsp;Deactivate Block
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <th style="width:160px;" class="wlw_th_mid">
+              <div style="margin-top:5px;">
+                <span id="wlw_persist_pill" class="wlw_pill pill_inactive">
+                  <span class="wlw_pill_dot"></span><span>BLOCK PERSISTENCE OFF</span>
+                </span>
+              </div>
+            </th>
+            <td>
+              <div class="wlw_ctrl_bar">
+                <button class="wlw_start_btn"
+                        onclick="persistControl('enable');return false;">
+                  &#9654;&nbsp;Enable Persistence
+                </button>
+                <button class="wlw_stop_btn"
+                        onclick="persistControl('disable');return false;">
+                  &#9632;&nbsp;Disable Persistence
+                </button>
               </div>
             </td>
           </tr>
         </table>
 
-        <!-- ----------- WHITELIST TABLE ---------------------------- -->
+        <!-- ========== WHITELIST TABLE ============================= -->
         <div class="wlw_section_label" style="margin-top:20px;">Whitelisted Entries</div>
-        <table id="wlw_entry_table" width="100%" border="1" align="center" cellpadding="0" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="table-layout: fixed;">
+        <table id="wlw_entry_table" width="100%" border="1" align="center"
+               cellpadding="0" cellspacing="0" bordercolor="#6b8fa3"
+               class="FormTable" style="table-layout:fixed;">
           <thead>
             <tr>
               <th style="width:10%; padding:8px 10px; text-align:center;">Type</th>
@@ -407,39 +601,42 @@ function wlw_keydown(e) {
             </tr>
           </thead>
 
-          <tbody id="wlw_tbody">
-            <!-- Entries will be injected here -->
-          </tbody>
-
-          <tr>
-            <td style="padding:8px 10px;">
-              <select id="wlw_new_type" class="wlw_type_sel" style="width:100%;">
-                <option value="mac">MAC</option>
-                <option value="ip">IP</option>
-                <option value="int">IFACE</option>
-              </select>
-            </td>
-            <td style="padding:8px 10px;">
-              <input type="text" id="wlw_new_value" class="wlw_value_input"
-                    placeholder="e.g. aa:bb:cc:dd:ee:ff, 192.168.1.40, wl0.1, eth5..."
-                    autocorrect="off" autocapitalize="off" autocomplete="off"
-                    onkeydown="wlw_keydown(event);" style="width:100%; box-sizing: border-box;">
-            </td>
-            <td style="padding:8px 10px; text-align:center;">
-              <button class="wlw_add_btn" onclick="addEntry();return false;">Add</button>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="3" style="padding:8px 10px; text-align:center;">
-              <div class="wlw_hint">
-                MAC: <code>xx:xx:xx:xx:xx:xx</code> &nbsp;|&nbsp;
-                IP: IPv4 or IPv6 &nbsp;|&nbsp;
-                Interface: <code>wl0.1</code>, <code>eth0</code>, <code>br0</code>&hellip;
-              </div>
-            </td>
-          </tr>
+          <!-- Dynamic rows injected by renderTable() -->
+          <tbody id="wlw_tbody"></tbody>
+          <tfoot>
+            <tr>
+              <td style="padding:8px 10px;">
+                <select id="wlw_new_type" class="wlw_type_sel" style="width:100%;">
+                  <option value="mac">MAC</option>
+                  <option value="ip">IP</option>
+                  <option value="int">IFACE</option>
+                </select>
+              </td>
+              <td style="padding:8px 10px;">
+                <input type="text" id="wlw_new_value" class="wlw_value_input"
+                       placeholder="e.g. aa:bb:cc:dd:ee:ff, 192.168.1.40, wl0.1, eth5&hellip;"
+                       autocorrect="off" autocapitalize="off" autocomplete="off"
+                       onkeydown="wlw_keydown(event);"
+                       style="width:100%; box-sizing:border-box;">
+              </td>
+              <td style="padding:8px 10px; text-align:center;">
+                <button class="wlw_add_btn"
+                        onclick="addEntry();return false;">Add</button>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="3" style="padding:8px 10px; text-align:center;">
+                <div class="wlw_hint">
+                  MAC: <code>xx:xx:xx:xx:xx:xx</code> &nbsp;|&nbsp;
+                  IP: IPv4 or IPv6 &nbsp;|&nbsp;
+                  Interface: <code>wl0.1</code>, <code>eth0</code>, <code>br0</code>&hellip;
+                </div>
+              </td>
+            </tr>
+          </tfoot>
         </table>
-        <!-- ----------- APPLY --------------------------------------- -->
+
+        <!-- ========== APPLY ======================================= -->
         <div class="apply_gen">
           <input name="button" type="button" class="button_gen"
                  onclick="applySettings();" value="Apply" />

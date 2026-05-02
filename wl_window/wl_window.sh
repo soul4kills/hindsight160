@@ -238,21 +238,21 @@ install_script() {
 
     _cron_active=$(cfg_get wlw_cron_active)
 
-    if [ "$_cron_active" = "0" ]; then
-        echo "[*] wlw_cron_active=$_cron_active, skipping cron installation."
-    else
-        echo "[*] wlw_cron_active=1, installing cron schedule..."
+    if [ "$_cron_active" = "1" ]; then
+        echo "[*] wlw_cron_active=$_cron_active, installing cron schedule..."
         install_cron
+    else
+        echo "[*] skipping cron installation."
     fi
 
     # Handles block persistence on reboots - use with caution
     _persist_active=$(cfg_get wlw_persist)
 
     if [ "$_persist_active" = "1" ]; then
-        echo "[*] wlw_persist=1, Block persistence active..."
+        echo "[*] wlw_persist=$_cron_active, Block persistence active..."
         apply_block
     else
-        echo "[*] wlw_persist=$_cron_active, Block persistence inactive."
+        echo "[*] Block persistence inactive."
     fi
 
     chmod 755 /jffs/addons/wl_window/*.sh

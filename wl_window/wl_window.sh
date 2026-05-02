@@ -246,9 +246,11 @@ install_script() {
     fi
 
     # Handles block persistence on reboots - use with caution
-    _persist_active=$(cfg_get wlw_persist)
 
-    if [ "$_persist_active" = "1" ]; then
+    _persist_active=$(cfg_get wlw_persist)
+    _wlw_active=$(cfg_get wlw_active)
+
+    if [ "$_wlw_active" = "1" ] && [ "$_persist_active" = "1" ]; then
         echo "[*] wlw_persist=$_cron_active, Block persistence active..."
         apply_block
     else

@@ -1,4 +1,6 @@
-<img width="1272" height="1227" alt="Screenshot 2026-05-01 094046" src="https://github.com/user-attachments/assets/3585ee1d-79a6-4d84-98a9-6f7d4a167fa8" />  
+<img width="1223" height="1057" alt="Screenshot 2026-05-01 183749" src="https://github.com/user-attachments/assets/88be9f74-7548-47c6-a54a-b1c5974aeea7" />
+
+
   
 # Whitelist Window – Internet Block with Whitelist (AsusWRT‑Merlin)
 
@@ -6,6 +8,7 @@ This addon adds a Whitelist Window page to the AsusWRT‑Merlin web UI that lets
 - Schedule a time window when all devices are blocked from internet access.
 - Whitelist specific MACs, IP addresses, and interfaces so they remain exempt.
 - Prevents clients from bypassing internet access blocks by mac address randomization
+- Added a block persistence if reboot the router is a method of bypass to be concerned about
 
 It is designed for AsusWRT‑Merlin firmware and uses the JFFS partition and SSH.
 

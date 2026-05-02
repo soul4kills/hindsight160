@@ -89,6 +89,17 @@ SERVICES_START="/jffs/scripts/services-start"
 
 # --- FIREWALL ----------------------------------------------------------------
 
+# Handles whether or not block survives a reboot
+persist_on() {
+    cfg_set "wlw_persist" "1"
+    logger "wl_window" "block persistence on"
+}
+
+persist_off() {
+    cfg_set "wlw_persist" "0"
+    logger "wl_window" "block persistence off"
+}
+
 install_cron() {
     # Add scheduled cron jobs for start and stop times
     cru a "$JOB_START" "$START_MM $START_HH * * * $SCRIPT start"
@@ -147,7 +158,7 @@ apply_block() {
     ip6tables -I FORWARD 1 -j "$CHAIN"
     conntrack -F 2>/dev/null
 
-    logger "wl_window" "Block ACTIVE Ã¢â‚¬â€ whitelisted devices/interfaces bypassed."
+    logger "wl_window" "Block ACTIVE whitelisted devices/interfaces bypassed."
     echo "[+] Whitelist Active: All authorized devices/interfaces bypass the block."
 
     # Write active flag for webui status pill, then snapshot status
@@ -173,7 +184,7 @@ remove_block() {
 }
 
 show_status() {
-    echo "=== Whitelist Window Ã¢â‚¬â€ Dual-Stack Status ==="
+    echo "=== Whitelist Window ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Dual-Stack Status ==="
     echo ""
     echo "Config  : $([ -f "$SETTINGS" ] && echo "$SETTINGS" || echo "built-in defaults")"
     echo "Schedule: ON at ${START_HH}:${START_MM}, OFF at ${END_HH}:${END_MM}"
@@ -210,7 +221,7 @@ install_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" install
     else
-        echo "[!] wl_window_install.sh not found Ã¢â‚¬â€ skipping webui install."
+        echo "[!] wl_window_install.sh not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â skipping webui install."
     fi
 
     # 3. Ensure cron survives reboot via services-start
@@ -232,6 +243,16 @@ install_script() {
     else
         echo "[*] wlw_cron_active=1, installing cron schedule..."
         install_cron
+    fi
+
+    # Handles block persistence on reboots - use with caution
+    _persist_active=$(cfg_get wlw_persist)
+
+    if [ "$_persist_active" = "0" ]; then
+        echo "[*] wlw_persist=$_cron_active, Block persistence inactive."
+    else
+        echo "[*] wlw_persist=1, Block persistence active..."
+        apply_block
     fi
 
     chmod 755 /jffs/addons/wl_window/*.sh
@@ -260,7 +281,7 @@ uninstall_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" uninstall
     else
-        echo "[!] wl_window_install.sh not found Ã¢â‚¬â€ skipping webui teardown."
+        echo "[!] wl_window_install.sh not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â skipping webui teardown."
     fi
 
     # 4. Clean up all wlw_* keys from shared custom_settings.txt
@@ -358,5 +379,7 @@ case "$1" in
     manage)    manage_list "$2" "$3" "$4" ;;
     cron_enable) install_cron ;;
     cron_disable) uninstall_cron ;;
-    *)         echo "Usage: $0 {start|stop|status|install|uninstall|manage|cron_enable|cron_disable}" ;;
+    persist_enable) persist_on ;;
+    persist_disable) persist_off ;;
+    *)         echo "Usage: $0 {start|stop|status|install|uninstall|manage|cron_enable|cron_disable|persist_enable|persist_disable}" ;;
 esac

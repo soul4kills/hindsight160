@@ -13,10 +13,32 @@ SCRIPT="$ADDON_DIR/wl_window.sh"
 ASP_SRC="$ADDON_DIR/WL_Window.asp"
 SVC_EVENT="/jffs/scripts/service-event"
 SVC_START="/jffs/scripts/services-start"
+SETTINGS="/jffs/addons/custom_settings.txt"
 ADDON_TAG="wl_window"
 
-# Merlin helper functions 
-source /usr/sbin/helper.sh
+# Merlin helper functions
+# Use POSIX dot-sourcing rather than the bash-only 'source' builtin,
+# since this script runs under /bin/sh (BusyBox ash).
+. /usr/sbin/helper.sh
+
+# ---------------------------------------------------------------------------
+# cfg_set: write or update a key in custom_settings.txt using cp-over so
+# the file inode is preserved (sed -i would change it, triggering Merlin
+# service restarts and dropping SSH sessions).
+# ---------------------------------------------------------------------------
+cfg_set() {
+    _k="$1"; _v="$2"
+    touch "$SETTINGS"
+    _tmp="${SETTINGS}.wlw_install.tmp"
+    grep -v "^$_k " "$SETTINGS" > "$_tmp" 2>/dev/null
+    printf '%s %s\n' "$_k" "$_v" >> "$_tmp"
+    cp "$_tmp" "$SETTINGS"
+    rm -f "$_tmp"
+}
+
+cfg_get() {
+    [ -f "$SETTINGS" ] && grep "^$1 " "$SETTINGS" | grep -v "^#" | cut -d' ' -f2-
+}
 
 install_addon() {
     # Verify firmware supports addons
@@ -33,6 +55,10 @@ install_addon() {
         exit 5
     fi
     logger "$ADDON_TAG" "Mounting WL_Window.asp as $am_webui_page"
+
+    # Persist the assigned page name so uninstall can find it reliably,
+    # regardless of what mount | grep would match.
+    cfg_set "wlw_webui_page" "$am_webui_page"
 
     # Mount the ASP page
     cp "$ASP_SRC" /www/user/"$am_webui_page"
@@ -70,11 +96,29 @@ install_addon() {
 
 uninstall_addon() {
     # 1. Unmount and remove the ASP page from /www/user/
-    MOUNTED=$(mount | grep "WL_Window\|wl_window" | awk '{print $3}' | head -1)
-    if [ -n "$MOUNTED" ]; then
+    #    Read the saved page name rather than grepping mount output, which is
+    #    unreliable for bind mounts (the source path may not contain our name).
+    SAVED_PAGE=$(cfg_get wlw_webui_page)
+    if [ -n "$SAVED_PAGE" ]; then
+        MOUNTED="/www/user/$SAVED_PAGE"
         umount "$MOUNTED" 2>/dev/null
         rm -f "$MOUNTED"
         echo "[-] Webui page unmounted: $MOUNTED"
+        # Remove the saved page key
+        _tmp="${SETTINGS}.wlw_install.tmp"
+        grep -v "^wlw_webui_page " "$SETTINGS" > "$_tmp" 2>/dev/null
+        cp "$_tmp" "$SETTINGS"
+        rm -f "$_tmp"
+    else
+        # Fallback: grep mount table (covers installs before this fix)
+        MOUNTED=$(mount | grep "WL_Window\|wl_window" | awk '{print $3}' | head -1)
+        if [ -n "$MOUNTED" ]; then
+            umount "$MOUNTED" 2>/dev/null
+            rm -f "$MOUNTED"
+            echo "[-] Webui page unmounted (fallback): $MOUNTED"
+        else
+            echo "[!] Could not determine webui page to unmount -- skipping."
+        fi
     fi
 
     # 2. Remove menu entry from menuTree.js

@@ -13,6 +13,8 @@ DEFAULT_START_HH=22
 DEFAULT_START_MM=00
 DEFAULT_END_HH=06
 DEFAULT_END_MM=00
+# Comma-separated cron day field: 0=Sun,1=Mon,...,6=Sat  "*" means every day
+DEFAULT_DAYS="*"
 
 DEFAULT_WHITELIST_MACS="
 AA:BB:CC:DD:EE:FF
@@ -30,13 +32,10 @@ DEFAULT_WHITELIST_IPS="
 # --- SETTINGS HELPERS --------------------------------------------------------
 
 cfg_get() {
-    # Read a plain key from the settings file, skipping the status marker block
     [ -f "$SETTINGS" ] && grep "^$1 " "$SETTINGS" | grep -v "^#" | cut -d' ' -f2-
 }
 
 cfg_set() {
-    # Write or update a plain key=value line in the settings file.
-    # Never touches the WLW_STATUS marker block.
     _k="$1"; _v="$2"
     touch "$SETTINGS"
     if grep -q "^$_k " "$SETTINGS" 2>/dev/null; then
@@ -47,8 +46,6 @@ cfg_set() {
 }
 
 cfg_set_status() {
-    # Write the multi-line status snapshot inside its own marker block so it
-    # never conflicts with plain key lines and doesn't grow the file.
     _k="$1"; _v="$2"
     touch "$SETTINGS"
     sed -i '/# WLW_STATUS_START/,/# WLW_STATUS_END/d' "$SETTINGS"
@@ -63,7 +60,10 @@ load_settings() {
     _ehh=$(cfg_get wlw_end_hh);   END_HH=${_ehh:-$DEFAULT_END_HH}
     _emm=$(cfg_get wlw_end_mm);   END_MM=${_emm:-$DEFAULT_END_MM}
 
-    # Load from JSON wlw_entries written by the webui, fall back to built-in defaults
+    # Days field: stored as a cron-compatible day-of-week string.
+    # The webui saves it as a comma list of 0-6 integers, or "*" for every day.
+    _days=$(cfg_get wlw_days); DAYS=${_days:-$DEFAULT_DAYS}
+
     _entries=$(cfg_get wlw_entries)
 
     if [ -n "$_entries" ]; then
@@ -77,7 +77,6 @@ load_settings() {
     fi
 }
 
-# Load settings at startup
 load_settings
 
 # --- CONSTANTS ---------------------------------------------------------------
@@ -89,7 +88,6 @@ SERVICES_START="/jffs/scripts/services-start"
 
 # --- FIREWALL ----------------------------------------------------------------
 
-# Handles whether or not block survives a reboot
 persist_on() {
     cfg_set "wlw_persist" "1"
     logger "wl_window" "block persistence on"
@@ -100,18 +98,36 @@ persist_off() {
     logger "wl_window" "block persistence off"
 }
 
+# ---------------------------------------------------------------------------
+# _build_cron_day_field DAYS
+#
+# Converts the stored DAYS value into a cron day-of-week field.
+#
+#   "*"          -> "*"          (every day)
+#   "1,2,3,4,5"  -> "1,2,3,4,5" (Mon-Fri)
+#   "0,6"        -> "0,6"        (weekends)
+#
+# Returns the field on stdout so callers can capture it.
+# ---------------------------------------------------------------------------
+_build_cron_day_field() {
+    _d="${1:-*}"
+    # Sanitise: keep only digits, commas, and asterisks
+    _d=$(echo "$_d" | tr -cd '0-9,*')
+    [ -z "$_d" ] && _d="*"
+    echo "$_d"
+}
+
 install_cron() {
-    # Add scheduled cron jobs for start and stop times
-    cru a "$JOB_START" "$START_MM $START_HH * * * $SCRIPT start"
-    cru a "$JOB_STOP"  "$END_MM $END_HH * * * $SCRIPT stop"
+    _day_field=$(_build_cron_day_field "$DAYS")
+    cru a "$JOB_START" "$START_MM $START_HH * * $_day_field $SCRIPT start"
+    cru a "$JOB_STOP"  "$END_MM $END_HH * * $_day_field $SCRIPT stop"
     cfg_set "wlw_cron_active" "1"
     logger "wl_window" "(wlw_cron_active=1)"
-    logger "wl_window" "Cron jobs installed: start=${START_HH}:${START_MM} stop=${END_HH}:${END_MM}"
-    echo "[+] Cron jobs added for schedule: start=${START_HH}:${START_MM} stop=${END_HH}:${END_MM}"
+    logger "wl_window" "Cron jobs installed: start=${START_HH}:${START_MM} stop=${END_HH}:${END_MM} days=${_day_field}"
+    echo "[+] Cron jobs added: start=${START_HH}:${START_MM} stop=${END_HH}:${END_MM} days=${_day_field}"
 }
 
 uninstall_cron() {
-    # Remove scheduled cron jobs
     cru d "$JOB_START" 2>/dev/null
     cru d "$JOB_STOP"  2>/dev/null
     cfg_set "wlw_cron_active" "0"
@@ -121,7 +137,6 @@ uninstall_cron() {
 }
 
 apply_block() {
-    # Tear down any existing rules first (silently no status write mid-flight)
     iptables  -D FORWARD -j "$CHAIN" 2>/dev/null
     iptables  -F "$CHAIN" 2>/dev/null
     iptables  -X "$CHAIN" 2>/dev/null
@@ -158,12 +173,10 @@ apply_block() {
     ip6tables -I FORWARD 1 -j "$CHAIN"
     conntrack -F 2>/dev/null
 
-    logger "wl_window" "Block ACTIVE whitelisted devices/interfaces bypassed."
+    logger "wl_window" "Block ACTIVE — whitelisted devices/interfaces bypassed."
     echo "[+] Whitelist Active: All authorized devices/interfaces bypass the block."
 
-    # Write active flag for webui status pill, then snapshot status
     cfg_set "wlw_active" "1"
-    #cfg_set_status "wlw_status" "$(show_status)"
 }
 
 remove_block() {
@@ -178,16 +191,43 @@ remove_block() {
     logger "wl_window" "Block INACTIVE."
     echo "[-] Whitelist Disabled."
 
-    # Write inactive flag first so the status snapshot is accurate
     cfg_set "wlw_active" "0"
-    #cfg_set_status "wlw_status" "$(show_status)"
+}
+
+# ---------------------------------------------------------------------------
+# _days_label DAYS
+# Returns a human-readable string for the day field, e.g. "Mon–Fri", "Every day"
+# ---------------------------------------------------------------------------
+_days_label() {
+    _df="${1:-*}"
+    case "$_df" in
+        "*")         echo "Every day" ;;
+        "1,2,3,4,5") echo "Mon–Fri" ;;
+        "0,6")       echo "Sat–Sun" ;;
+        "0,1,2,3,4,5,6") echo "Every day" ;;
+        *)
+            # Map individual numbers to short names
+            _label=$(echo "$_df" | sed \
+                -e 's/\b0\b/Sun/g' \
+                -e 's/\b1\b/Mon/g' \
+                -e 's/\b2\b/Tue/g' \
+                -e 's/\b3\b/Wed/g' \
+                -e 's/\b4\b/Thu/g' \
+                -e 's/\b5\b/Fri/g' \
+                -e 's/\b6\b/Sat/g')
+            echo "$_label"
+            ;;
+    esac
 }
 
 show_status() {
-    echo "=== Whitelist Window ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Dual-Stack Status ==="
+    _day_field=$(_build_cron_day_field "$DAYS")
+    _day_label=$(_days_label "$_day_field")
+
+    echo "=== Whitelist Window — Dual-Stack Status ==="
     echo ""
     echo "Config  : $([ -f "$SETTINGS" ] && echo "$SETTINGS" || echo "built-in defaults")"
-    echo "Schedule: ON at ${START_HH}:${START_MM}, OFF at ${END_HH}:${END_MM}"
+    echo "Schedule: ON at ${START_HH}:${START_MM}, OFF at ${END_HH}:${END_MM}, Days: ${_day_label} (cron: ${_day_field})"
     echo ""
     if iptables -L FORWARD 2>/dev/null | grep -q "$CHAIN"; then
         echo "STATE: ACTIVE"
@@ -216,18 +256,13 @@ show_status() {
 install_script() {
     echo "[*] Installing Whitelist Window..."
 
-    # 1. Install webui page and service-event handler
     INSTALL_SCRIPT="$ADDON_DIR/wl_window_install.sh"
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" install
     else
-        echo "[!] wl_window_install.sh not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â skipping webui install."
+        echo "[!] wl_window_install.sh not found — skipping webui install."
     fi
 
-    # 3. Ensure cron survives reboot via services-start
-    #    wl_window_install.sh already adds itself to services-start for the webui,
-    #    but we also need wl_window.sh install to run so cron is re-registered.
-    #    Use a single canonical entry that covers both.
     if [ -f "$SERVICES_START" ]; then
         grep -q "wl_window.sh install" "$SERVICES_START" || \
             echo "sh $SCRIPT install" >> "$SERVICES_START"
@@ -238,62 +273,58 @@ install_script() {
 
     _cron_active=$(cfg_get wlw_cron_active)
 
-    if [ "$_cron_active" = "1" ]; then
-        echo "[*] wlw_cron_active=$_cron_active, installing cron schedule..."
-        install_cron
+    if [ "$_cron_active" = "0" ]; then
+        echo "[*] wlw_cron_active=0, skipping cron installation."
     else
-        echo "[*] skipping cron installation."
+        echo "[*] wlw_cron_active=1, installing cron schedule..."
+        install_cron
     fi
-
-    # Handles block persistence on reboots - use with caution
 
     _persist_active=$(cfg_get wlw_persist)
     _wlw_active=$(cfg_get wlw_active)
 
     if [ "$_wlw_active" = "1" ] && [ "$_persist_active" = "1" ]; then
-        echo "[*] wlw_persist=$_cron_active, Block persistence active..."
+        echo "[*] wlw_persist=1 — block persistence active..."
         apply_block
     else
         echo "[*] Block persistence inactive."
     fi
 
     chmod 755 /jffs/addons/wl_window/*.sh
+
+    # Populate client/interface/resolve data for the webui on first install
+    sh "$ADDON_DIR/wlwindow_service.sh" restart wlwindow_refresh
+
     echo "[+] Whitelist Window fully installed."
 }
 
 uninstall_script() {
     echo "[*] Uninstalling Whitelist Window..."
 
-    # 1. Remove iptables rules, cron jobs, and inactive flag
     remove_block
 
-    # 2. Remove cron jobs
     cru d "$JOB_START" 2>/dev/null
     cru d "$JOB_STOP"  2>/dev/null
     echo "[-] Cron jobs removed."
 
-    # 3. Remove services-start entry (both the install script line and the direct script line)
     if [ -f "$SERVICES_START" ]; then
         sed -i "\|sh $SCRIPT install|d" "$SERVICES_START"
         sed -i "\|wl_window_install.sh install|d" "$SERVICES_START"
     fi
 
-    # 3. Delegate webui teardown to the install script if present
     INSTALL_SCRIPT="$ADDON_DIR/wl_window_install.sh"
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" uninstall
     else
-        echo "[!] wl_window_install.sh not found ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â skipping webui teardown."
+        echo "[!] wl_window_install.sh not found — skipping webui teardown."
     fi
 
-    # 4. Clean up all wlw_* keys from shared custom_settings.txt
     if [ -f "$SETTINGS" ]; then
         sed -i '/^wlw_/d' "$SETTINGS"
         sed -i '/# WLW_STATUS_START/,/# WLW_STATUS_END/d' "$SETTINGS"
         echo "[-] Settings removed from $SETTINGS."
     fi
 
-    # 5. Remove the addon directory
     if [ -d "$ADDON_DIR" ]; then
         rm -rf "$ADDON_DIR"
         echo "[-] Addon directory removed: $ADDON_DIR"
@@ -305,8 +336,8 @@ uninstall_script() {
 # --- MANAGE ------------------------------------------------------------------
 
 manage_list() {
-    ACTION=$1  # add | del | list
-    TYPE=$2    # mac | ip | int
+    ACTION=$1
+    TYPE=$2
     VALUE=$3
 
     show_current() {
@@ -337,15 +368,11 @@ manage_list() {
 
     VALUE=$(echo "$VALUE" | tr '[:upper:]' '[:lower:]')
 
-    # Build new entries list by modifying the current wlw_entries JSON
     _entries=$(cfg_get wlw_entries)
 
     if [ "$ACTION" = "add" ]; then
-        # Check duplicate
         echo "$_entries" | grep -q "\"value\":\"$VALUE\"" && { echo "[!] $VALUE already whitelisted."; return; }
-        # Append new object before closing bracket
         new_entries=$(echo "$_entries" | sed "s/\]\$/,{\"type\":\"$TYPE\",\"value\":\"$VALUE\"}]/")
-        # Handle empty array edge case
         [ "$_entries" = "[]" ] && new_entries="[{\"type\":\"$TYPE\",\"value\":\"$VALUE\"}]"
         cfg_set "wlw_entries" "$new_entries"
         echo "[+] Added $VALUE ($TYPE)"
@@ -353,7 +380,6 @@ manage_list() {
 
     elif [ "$ACTION" = "del" ]; then
         echo "$_entries" | grep -q "\"value\":\"$VALUE\"" || { echo "[!] $VALUE not found."; return; }
-        # Remove the matching object (handles both mid-array and last-element commas)
         new_entries=$(echo "$_entries" | \
             sed "s/{\"type\":\"[^\"]*\",\"value\":\"$VALUE\"},\?//g" | \
             sed 's/,\]/]/' | \
@@ -363,7 +389,6 @@ manage_list() {
         logger "wl_window" "Removed $VALUE from wlw_entries"
     fi
 
-    # Hot-reload firewall if currently active
     if iptables -L FORWARD 2>/dev/null | grep -q "$CHAIN"; then
         load_settings
         apply_block
@@ -373,16 +398,16 @@ manage_list() {
 # --- DISPATCH ----------------------------------------------------------------
 
 case "$1" in
-    start)     apply_block ;;
-    stop)      remove_block ;;
-    status)    show_status ;;
-    install)   install_script ;;
-    uninstall) uninstall_script ;;
-    manage)    manage_list "$2" "$3" "$4" ;;
-    cron_enable) install_cron ;;
-    cron_disable) uninstall_cron ;;
-    persist_enable) persist_on ;;
+    start)           apply_block ;;
+    stop)            remove_block ;;
+    status)          show_status ;;
+    install)         install_script ;;
+    uninstall)       uninstall_script ;;
+    manage)          manage_list "$2" "$3" "$4" ;;
+    cron_enable)     install_cron ;;
+    cron_disable)    uninstall_cron ;;
+    persist_enable)  persist_on ;;
     persist_disable) persist_off ;;
-    *)         echo "Usage: $0 {start|stop|status|install|uninstall|manage|cron_enable|cron_disable|persist_enable|persist_disable}" ;;
+    *)  echo "Usage: $0 {start|stop|status|install|uninstall|manage|cron_enable|cron_disable|persist_enable|persist_disable}" ;;
 esac
 exit 0

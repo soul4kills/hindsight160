@@ -23,6 +23,9 @@ ASUS never implemented an automatic 160 MHz recovery mechanism in their firmware
 - **Function**: Runs via cron every 30 minutes (`1,31 * * * *`).
 - **Mode selection**: Automatically detects whether the router is dual‑band or tri‑band. Can also be forced manually via `IFACE1`/`IFACE2`.
 
+Originally released here on this forum.   
+https://www.snbforums.com/threads/script-160mhz-channel-recovery-for-wifi-6-only-routers.96964/
+
 ***
 
 ## 📦 Features

@@ -13,7 +13,9 @@ This addon adds a Whitelist Window page to the AsusWRT‑Merlin web UI that lets
 - Prevents clients from bypassing internet access blocks by mac address randomization
 - Added a block persistence if reboot the router is a method of bypass to be concerned about
 
-It is designed for AsusWRT‑Merlin firmware and uses the JFFS partition and SSH.
+It is designed for AsusWRT‑Merlin firmware and uses the JFFS partition and SSH.   
+Originally released here.  
+https://www.snbforums.com/threads/kids-bypassing-parental-controls-time-scheduling-via-band-switching-mac-randomization-on-aimesh.97136/post-991676
 
 ---
 

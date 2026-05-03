@@ -21,10 +21,15 @@ SETTINGS_LOCK="/tmp/wl_window_settings.lock"
 
 [ "$TYPE" != "restart" ] && exit 0
 
+# Ensure the lock directory is cleaned up if this script is killed mid-run.
+# Without this, a SIGKILL leaves ${SETTINGS_LOCK}.dir behind and all subsequent
+# cfg_set calls will spin for 2 seconds then bail until manually removed.
+trap 'rmdir "${SETTINGS_LOCK}.dir" 2>/dev/null' EXIT INT TERM
+
 # ---------------------------------------------------------------------------
 # cfg_set: write or update a key, preserving the file inode (cp-over).
 # Renaming via sed -i changes the inode which Merlin's config daemon treats
-# as a trigger to restart services â€” dropping active SSH sessions.
+# as a trigger to restart services -- dropping active SSH sessions.
 # ---------------------------------------------------------------------------
 cfg_set() {
     _k="$1"; _v="$2"
@@ -78,26 +83,29 @@ cfg_set_json() {
 #
 # Builds and writes three keys into custom_settings.txt:
 #
-#   wlw_resolve  â€” JSON object: MAC/IP -> { assigned, associated }
-#                  Used by the whitelist table to show resolved names.
+#   wlw_resolve  -- JSON object: MAC/IP -> { assigned, associated }
+#                   Used by the whitelist table to show resolved names.
 #
-#   wlw_clients  â€” JSON array: known LAN clients with status, names, IP, MAC.
-#                  Used by the add-entry client picker dropdown.
+#   wlw_clients  -- JSON array: known LAN clients with status, names, IP, MAC.
+#                   Used by the add-entry client picker dropdown.
 #
-#   wlw_ifaces   â€” JSON array: active LAN interface names.
-#                  Used by the add-entry interface picker dropdown.
+#   wlw_ifaces   -- JSON array: active LAN interface names.
+#                   Used by the add-entry interface picker dropdown.
 #
 # Spaces in JSON string values are encoded as \u0020 before writing so they
 # survive the "key<space>value" line format of custom_settings.txt.
-# JavaScript's JSON.parse decodes \u0020 transparently â€” no client-side
+# JavaScript's JSON.parse decodes \u0020 transparently -- no client-side
 # decode step needed.
 #
 # Exclusions (clients + interfaces):
 #   - WAN interface and its MAC / IP
 #   - The router itself (lan_ipaddr, lan_hwaddr)
-#   - Bridge interfaces (br0, br1, ...) â€” these are the LAN bridge, not clients
+#   - Bridge interfaces (br0, br1, ...) -- these are the LAN bridge, not clients
 #   - Loopback and tunnel interfaces (lo, sit, ip6tnl, tunl)
 #   - Incomplete ARP / lease entries
+#
+# Note: entry parsing matches both JSON key orderings:
+#   {"type":"mac","value":"..."} and {"value":"...","type":"mac"}
 # ---------------------------------------------------------------------------
 generate_webui_data() {
     LEASE_FILE="/var/lib/misc/dnsmasq.leases"
@@ -127,8 +135,15 @@ generate_webui_data() {
     _first=1
 
     if [ -n "$_entries" ]; then
-        _macs=$(echo "$_entries" | grep -o '"type":"mac","value":"[^"]*"' | sed 's/.*"value":"\([^"]*\)".*/\1/')
-        _ips=$(echo  "$_entries" | grep -o '"type":"ip","value":"[^"]*"'  | sed 's/.*"value":"\([^"]*\)".*/\1/')
+        # Extract values tolerant of either key order in each JSON object
+        _macs=$(echo "$_entries" \
+            | grep -oE '"type":"mac"[^}]*"value":"[^"]*"|"value":"[^"]*"[^}]*"type":"mac"' \
+            | grep -o '"value":"[^"]*"' \
+            | sed 's/"value":"\([^"]*\)"/\1/')
+        _ips=$(echo "$_entries" \
+            | grep -oE '"type":"ip"[^}]*"value":"[^"]*"|"value":"[^"]*"[^}]*"type":"ip"' \
+            | grep -o '"value":"[^"]*"' \
+            | sed 's/"value":"\([^"]*\)"/\1/')
 
         for mac in $_macs; do
             MAC_UPPER=$(echo "$mac" | tr 'a-z' 'A-Z')
@@ -224,7 +239,7 @@ generate_webui_data() {
     # Excluded:
     #   - WAN interface
     #   - lo, sit, ip6tnl, tunl  (loopback / tunnels)
-    #   - br*  (LAN bridge â€” router-owned, not a client interface)
+    #   - br*  (LAN bridge -- router-owned, not a client interface)
     # ----------------------------------------------------------------
     _ifaces_json="["
     _first=1
@@ -293,7 +308,7 @@ case "$EVENT" in
         fi
 
         if iptables -L FORWARD 2>/dev/null | grep -q "WL_WINDOW"; then
-            logger -t "wl_window" "Block is active â€” reloading rules with new settings."
+            logger -t "wl_window" "Block is active -- reloading rules with new settings."
             sh "$SCRIPT" start
         fi
 

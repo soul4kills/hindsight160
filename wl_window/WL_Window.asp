@@ -781,11 +781,12 @@ function wlw_keydown(e) {
         <div class="formfonttitle">Whitelist Window &mdash; Internet Access Scheduler</div>
         <div style="margin:10px 0 10px 5px;" class="splitLine"></div>
         <div class="formfontdesc">
-          Blocks all internet access inside the scheduled window, except for whitelisted
-          MACs, IPs, and interfaces.
+          Blocks all internet access inside the scheduled window<strong> except for whitelisted
+          MACs, IPs, and interfaces</strong>.
           <br>
-          The purpose of this addon/script is to prevent internet access bypassing by MAC randomization.
+          The purpose of this addon/script is to prevent <strong>clients</strong> from <strong>bypassing</strong> internet access restrictions with <strong>MAC randomization</strong>.
         </div>
+
 
         <!-- ========== SCHEDULE / CRON CONTROL ==================== -->
         <div class="wlw_section_label" style="margin-top:16px;">Internet Access Management</div>

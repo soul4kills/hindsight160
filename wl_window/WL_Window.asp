@@ -248,19 +248,19 @@ var custom_settings = <% get_custom_settings(); %>;
 
 /*
  * Runtime state
- *   wlw_entries  — current whitelist: [{ type, value, _uid }]
- *   wlw_days     — selected block nights: [0-6] (0=Sun)
+ *   wlw_entries  â€” current whitelist: [{ type, value, _uid }]
+ *   wlw_days     â€” selected block nights: [0-6] (0=Sun)
  *
  * Loaded from custom_settings on page load (written by wlwindow_service.sh):
- *   wlw_resolve  — { "mac-or-ip": { assigned, associated } }
- *   wlw_clients  — [{ value, ip, assigned, associated, status }]
- *   wlw_ifaces   — [{ value, label }]
+ *   wlw_resolve  â€” { "mac-or-ip": { assigned, associated } }
+ *   wlw_clients  â€” [{ value, ip, assigned, associated, status }]
+ *   wlw_ifaces   â€” [{ value, label }]
  *
  * All three are space-encoded (\u0020) in custom_settings.txt so they
  * survive the "key<space>value" line format.  JSON.parse decodes \u0020
- * back to spaces automatically — no manual decode needed.
+ * back to spaces automatically â€” no manual decode needed.
  *
- * packSettings() must NOT write resolve/clients/ifaces back — they are
+ * packSettings() must NOT write resolve/clients/ifaces back â€” they are
  * owned by the service script and must not be overwritten with stale values.
  */
 var wlw_entries      = [];
@@ -354,20 +354,20 @@ function loadSettings() {
   /* Days */
   wlw_days = _parseDays(custom_settings.wlw_days);
 
-  /* Resolve map — read-only, written by service script.
+  /* Resolve map â€” read-only, written by service script.
      \u0020 in names is decoded automatically by JSON.parse. */
   try {
     if (custom_settings.wlw_resolve && custom_settings.wlw_resolve !== "")
       wlw_resolve = JSON.parse(custom_settings.wlw_resolve);
   } catch(e) { wlw_resolve = {}; }
 
-  /* Client list — read-only, written by service script */
+  /* Client list â€” read-only, written by service script */
   try {
     if (custom_settings.wlw_clients && custom_settings.wlw_clients !== "")
       wlw_clients = JSON.parse(custom_settings.wlw_clients);
   } catch(e) { wlw_clients = []; }
 
-  /* Interface list — read-only, written by service script */
+  /* Interface list â€” read-only, written by service script */
   try {
     if (custom_settings.wlw_ifaces && custom_settings.wlw_ifaces !== "")
       wlw_ifaces = JSON.parse(custom_settings.wlw_ifaces);
@@ -465,7 +465,7 @@ function updateDaysSummary() {
 /* ----------------------------------------------------------------
    Pack settings
    NOTE: wlw_resolve, wlw_clients, wlw_ifaces are NOT packed.
-   They are owned by the service script — packing them would
+   They are owned by the service script â€” packing them would
    overwrite fresh data with the stale values from this page load.
 ---------------------------------------------------------------- */
 function packSettings() {
@@ -494,7 +494,7 @@ function submitAction(script, wait) {
 }
 
 /* ----------------------------------------------------------------
-   Actions — each reverts the toggle visually on cancel
+   Actions â€” each reverts the toggle visually on cancel
 ---------------------------------------------------------------- */
 function applySettings() {
   submitAction("restart_wlwindow", 5);
@@ -833,10 +833,10 @@ function wlw_keydown(e) {
 
           <tr>
             <th class="wlw_th_mid">Days (<span id="wlw_days_summary"></span> )
-              <div style="margin-top:8px; padding:8px 10px; background:#2a1f0a; border:1px solid #7a5a1a; border-radius:3px;">
-                <span style="background:#2a1f0a; color:#e0a840; font-size:11px; font-weight:bold; letter-spacing:0.5px;">&#9888;&nbsp;MIDNIGHT SCHEDULE NOTE</span>
+              <div style="margin: 6px 6px 6px 0px; padding:8px 10px; background:#2a1f0a; border:1px solid #7a5a1a; border-radius:3px;">
+                <span style="background:#2a1f0a; color:#e0a840; font-size:11px; font-weight:bold; letter-spacing:0.5px;">&#9888;&nbsp;&nbsp;MIDNIGHT SCHEDULE NOTE&nbsp;&nbsp;&#9888;</span>
                 <div style="color:#c0944a; font-size:11px; margin-top:4px; line-height:1.6;">
-                  If the block schedule crosses midnight, be mindful of when the overlapping day starts/ends.
+                  If the block schedule crosses midnight, be mindful of what day the block starts/ends.
                 </div>
               </div>
             </th>
@@ -852,7 +852,7 @@ function wlw_keydown(e) {
                 <button class="wlw_day_shortcut" onclick="selectDays('offset_weekends');return false;">Midnight Weekends (Sat&ndash;Sun)</button>
               </div>
               <div class="wlw_hint" style="margin-top:4px;">
-                Click a day to toggle it. Changes take effect after Apply.
+                Click a day to toggle it. Click Apply for changes to take effect.
               </div>
             </td>
           </tr>
@@ -888,11 +888,11 @@ function wlw_keydown(e) {
         </table>
 
         <div style="margin-top:8px; padding:8px 10px; background:#2a1f0a; border:1px solid #7a5a1a; border-radius:3px;">
-          <span style="color:#e0a840; font-size:11px; font-weight:bold; letter-spacing:0.5px;">&#9888;&nbsp;BLOCK PERSISTENCE</span>
+          <span style="color:#e0a840; font-size:11px; font-weight:bold; letter-spacing:0.5px;">&#9888;&nbsp;&nbsp;BLOCK PERSISTENCE&nbsp;&nbsp;&#9888;</span>
           <div style="color:#c0944a; font-size:11px; margin-top:4px; line-height:1.6;">
-            Only use this if rebooting the router to bypass the block is an actual concern.
-            If clients are configured incorrectly it can cause a permanent lockout requiring a hard reset.
-            Test your settings thoroughly before enabling.
+            Use only if a reboot to bypass access restrictions is concern.
+            If configured incorrectly, it will lead to a permanent lockout requiring a hard reset to remedy.
+            <strong>Test your settings thoroughly before enabling.</strong>
           </div>
         </div>
 
@@ -912,7 +912,7 @@ function wlw_keydown(e) {
                   <option value="int">IFACE</option>
                 </select>
               </td>
-              <td colspan="2" style="width:80%; padding:8px 10px; text-align:center;">
+              <td colspan="2" style="width: 100%; padding:8px 10px; text-align:center;">
                 <div class="wlw_add_row_inner">
                   <input type="text" id="wlw_new_value" class="wlw_value_input"
                          placeholder="e.g. aa:bb:cc:dd:ee:ff ..."

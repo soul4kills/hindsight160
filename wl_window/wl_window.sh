@@ -173,7 +173,7 @@ apply_block() {
     ip6tables -I FORWARD 1 -j "$CHAIN"
     conntrack -F 2>/dev/null
 
-    logger "wl_window" "Block ACTIVE — whitelisted devices/interfaces bypassed."
+    logger "wl_window" "Block ACTIVE â€” whitelisted devices/interfaces bypassed."
     echo "[+] Whitelist Active: All authorized devices/interfaces bypass the block."
 
     cfg_set "wlw_active" "1"
@@ -196,14 +196,14 @@ remove_block() {
 
 # ---------------------------------------------------------------------------
 # _days_label DAYS
-# Returns a human-readable string for the day field, e.g. "Mon–Fri", "Every day"
+# Returns a human-readable string for the day field, e.g. "Monâ€“Fri", "Every day"
 # ---------------------------------------------------------------------------
 _days_label() {
     _df="${1:-*}"
     case "$_df" in
         "*")         echo "Every day" ;;
-        "1,2,3,4,5") echo "Mon–Fri" ;;
-        "0,6")       echo "Sat–Sun" ;;
+        "1,2,3,4,5") echo "Monâ€“Fri" ;;
+        "0,6")       echo "Satâ€“Sun" ;;
         "0,1,2,3,4,5,6") echo "Every day" ;;
         *)
             # Map individual numbers to short names
@@ -224,7 +224,7 @@ show_status() {
     _day_field=$(_build_cron_day_field "$DAYS")
     _day_label=$(_days_label "$_day_field")
 
-    echo "=== Whitelist Window — Dual-Stack Status ==="
+    echo "=== Whitelist Window â€” Dual-Stack Status ==="
     echo ""
     echo "Config  : $([ -f "$SETTINGS" ] && echo "$SETTINGS" || echo "built-in defaults")"
     echo "Schedule: ON at ${START_HH}:${START_MM}, OFF at ${END_HH}:${END_MM}, Days: ${_day_label} (cron: ${_day_field})"
@@ -260,7 +260,7 @@ install_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" install
     else
-        echo "[!] wl_window_install.sh not found — skipping webui install."
+        echo "[!] wl_window_install.sh not found â€” skipping webui install."
     fi
 
     if [ -f "$SERVICES_START" ]; then
@@ -273,18 +273,18 @@ install_script() {
 
     _cron_active=$(cfg_get wlw_cron_active)
 
-    if [ "$_cron_active" = "0" ]; then
-        echo "[*] wlw_cron_active=0, skipping cron installation."
-    else
+    if [ "$_cron_active" = "1" ]; then
         echo "[*] wlw_cron_active=1, installing cron schedule..."
         install_cron
+    else
+        echo "[*] wlw_cron_active=0, skipping cron installation."
     fi
 
     _persist_active=$(cfg_get wlw_persist)
     _wlw_active=$(cfg_get wlw_active)
 
     if [ "$_wlw_active" = "1" ] && [ "$_persist_active" = "1" ]; then
-        echo "[*] wlw_persist=1 — block persistence active..."
+        echo "[*] wlw_persist=1 â€” block persistence active..."
         apply_block
     else
         echo "[*] Block persistence inactive."
@@ -293,7 +293,7 @@ install_script() {
     chmod 755 /jffs/addons/wl_window/*.sh
 
     # Populate client/interface/resolve data for the webui on first install
-    sh "$ADDON_DIR/wlwindow_service.sh" restart wlwindow_refresh
+    sh "/jffs/addons/wl_window/wlwindow_service.sh" restart wlwindow_refresh
 
     echo "[+] Whitelist Window fully installed."
 }
@@ -316,7 +316,7 @@ uninstall_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" uninstall
     else
-        echo "[!] wl_window_install.sh not found — skipping webui teardown."
+        echo "[!] wl_window_install.sh not found â€” skipping webui teardown."
     fi
 
     if [ -f "$SETTINGS" ]; then

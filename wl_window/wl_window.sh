@@ -35,14 +35,16 @@ cfg_get() {
     [ -f "$SETTINGS" ] && grep "^$1 " "$SETTINGS" | grep -v "^#" | cut -d' ' -f2-
 }
 
+# cfg_set: write or update a key using grep -v + cp-over to preserve the file
+# inode and avoid sed mangling backslashes in JSON values (e.g. \u0020).
 cfg_set() {
     _k="$1"; _v="$2"
     touch "$SETTINGS"
-    if grep -q "^$_k " "$SETTINGS" 2>/dev/null; then
-        sed -i "s|^$_k .*|$_k $_v|" "$SETTINGS"
-    else
-        echo "$_k $_v" >> "$SETTINGS"
-    fi
+    _tmp="${SETTINGS}.wlw.tmp"
+    grep -v "^$_k " "$SETTINGS" > "$_tmp" 2>/dev/null
+    printf '%s %s\n' "$_k" "$_v" >> "$_tmp"
+    cp "$_tmp" "$SETTINGS"
+    rm -f "$_tmp"
 }
 
 cfg_set_status() {
@@ -67,9 +69,19 @@ load_settings() {
     _entries=$(cfg_get wlw_entries)
 
     if [ -n "$_entries" ]; then
-        WHITELIST_MACS=$(echo "$_entries" | grep -o '{"type":"mac"[^}]*}' | sed 's/.*"value":"\([^"]*\)".*/\1/')
-        WHITELIST_IPS=$(echo "$_entries" | grep -o '{"type":"ip"[^}]*}' | sed 's/.*"value":"\([^"]*\)".*/\1/')
-        WHITELIST_INTERFACES=$(echo "$_entries" | grep -o '{"type":"int"[^}]*}' | sed 's/.*"value":"\([^"]*\)".*/\1/')
+        # Match both key orderings: {"type":"mac","value":"..."} and {"value":"...","type":"mac"}
+        WHITELIST_MACS=$(echo "$_entries" \
+            | grep -oE '"type":"mac"[^}]*"value":"[^"]*"|"value":"[^"]*"[^}]*"type":"mac"' \
+            | grep -o '"value":"[^"]*"' \
+            | sed 's/"value":"\([^"]*\)"/\1/')
+        WHITELIST_IPS=$(echo "$_entries" \
+            | grep -oE '"type":"ip"[^}]*"value":"[^"]*"|"value":"[^"]*"[^}]*"type":"ip"' \
+            | grep -o '"value":"[^"]*"' \
+            | sed 's/"value":"\([^"]*\)"/\1/')
+        WHITELIST_INTERFACES=$(echo "$_entries" \
+            | grep -oE '"type":"int"[^}]*"value":"[^"]*"|"value":"[^"]*"[^}]*"type":"int"' \
+            | grep -o '"value":"[^"]*"' \
+            | sed 's/"value":"\([^"]*\)"/\1/')
     else
         WHITELIST_MACS="$DEFAULT_WHITELIST_MACS"
         WHITELIST_IPS="$DEFAULT_WHITELIST_IPS"
@@ -173,7 +185,7 @@ apply_block() {
     ip6tables -I FORWARD 1 -j "$CHAIN"
     conntrack -F 2>/dev/null
 
-    logger "wl_window" "Block ACTIVE â€” whitelisted devices/interfaces bypassed."
+    logger "wl_window" "Block ACTIVE -- whitelisted devices/interfaces bypassed."
     echo "[+] Whitelist Active: All authorized devices/interfaces bypass the block."
 
     cfg_set "wlw_active" "1"
@@ -196,25 +208,30 @@ remove_block() {
 
 # ---------------------------------------------------------------------------
 # _days_label DAYS
-# Returns a human-readable string for the day field, e.g. "Mon", “Fri", "Every day"
+# Returns a human-readable string for the day field, e.g. "Mon", "Fri", "Every day"
+# Uses comma/boundary-safe sed patterns instead of \b (not supported in BusyBox sed).
 # ---------------------------------------------------------------------------
 _days_label() {
     _df="${1:-*}"
     case "$_df" in
-        "*")         echo "Every day" ;;
-        "1,2,3,4,5") echo "Monâ€“Fri" ;;
-        "0,6")       echo "Satâ€“Sun" ;;
-        "0,1,2,3,4,5,6") echo "Every day" ;;
+        "*"|"0,1,2,3,4,5,6") echo "Every day" ;;
+        "1,2,3,4,5")         echo "Mon-Fri"   ;;
+        "0,1,2,3,4")         echo "Sun-Thu"   ;;
+        "5,6")               echo "Fri-Sat"   ;;
+        "0,6")               echo "Sat-Sun"   ;;
         *)
-            # Map individual numbers to short names
-            _label=$(echo "$_df" | sed \
-                -e 's/\b0\b/Sun/g' \
-                -e 's/\b1\b/Mon/g' \
-                -e 's/\b2\b/Tue/g' \
-                -e 's/\b3\b/Wed/g' \
-                -e 's/\b4\b/Thu/g' \
-                -e 's/\b5\b/Fri/g' \
-                -e 's/\b6\b/Sat/g')
+            # Map digit tokens to day names. Anchored at start/end of string
+            # and around commas so single digits don't match inside multi-digit
+            # numbers. \b is not available in BusyBox sed.
+            _label=$(printf '%s' "$_df" \
+                | sed \
+                    -e 's/^0,/Sun,/' -e 's/,0,/,Sun,/g' -e 's/,0$/,Sun/' -e 's/^0$/Sun/' \
+                    -e 's/^1,/Mon,/' -e 's/,1,/,Mon,/g' -e 's/,1$/,Mon/' -e 's/^1$/Mon/' \
+                    -e 's/^2,/Tue,/' -e 's/,2,/,Tue,/g' -e 's/,2$/,Tue/' -e 's/^2$/Tue/' \
+                    -e 's/^3,/Wed,/' -e 's/,3,/,Wed,/g' -e 's/,3$/,Wed/' -e 's/^3$/Wed/' \
+                    -e 's/^4,/Thu,/' -e 's/,4,/,Thu,/g' -e 's/,4$/,Thu/' -e 's/^4$/Thu/' \
+                    -e 's/^5,/Fri,/' -e 's/,5,/,Fri,/g' -e 's/,5$/,Fri/' -e 's/^5$/Fri/' \
+                    -e 's/^6,/Sat,/' -e 's/,6,/,Sat,/g' -e 's/,6$/,Sat/' -e 's/^6$/Sat/')
             echo "$_label"
             ;;
     esac
@@ -260,7 +277,7 @@ install_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" install
     else
-        echo "[!] wl_window_install.sh not found â€” skipping webui install."
+        echo "[!] wl_window_install.sh not found -- skipping webui install."
     fi
 
     if [ -f "$SERVICES_START" ]; then
@@ -274,7 +291,7 @@ install_script() {
     _cron_active=$(cfg_get wlw_cron_active)
 
     if [ "$_cron_active" = "1" ]; then
-        echo "[*] wlw_cron_active=1, installing cron schedule..."
+        echo "[+] wlw_cron_active=1 -- installing cron schedule..."
         install_cron
     else
         echo "[*] wlw_cron_active=0, skipping cron installation."
@@ -284,7 +301,7 @@ install_script() {
     _wlw_active=$(cfg_get wlw_active)
 
     if [ "$_wlw_active" = "1" ] && [ "$_persist_active" = "1" ]; then
-        echo "[*] wlw_persist=1 â€” block persistence active..."
+        echo "[+] wlw_persist=1 -- block persistence active..."
         apply_block
     else
         echo "[*] Block persistence inactive."
@@ -316,7 +333,7 @@ uninstall_script() {
     if [ -f "$INSTALL_SCRIPT" ]; then
         sh "$INSTALL_SCRIPT" uninstall
     else
-        echo "[!] wl_window_install.sh not found â€” skipping webui teardown."
+        echo "[!] wl_window_install.sh not found -- skipping webui teardown."
     fi
 
     if [ -f "$SETTINGS" ]; then
@@ -372,8 +389,12 @@ manage_list() {
 
     if [ "$ACTION" = "add" ]; then
         echo "$_entries" | grep -q "\"value\":\"$VALUE\"" && { echo "[!] $VALUE already whitelisted."; return; }
-        new_entries=$(echo "$_entries" | sed "s/\]\$/,{\"type\":\"$TYPE\",\"value\":\"$VALUE\"}]/")
-        [ "$_entries" = "[]" ] && new_entries="[{\"type\":\"$TYPE\",\"value\":\"$VALUE\"}]"
+        # Handle absent key (empty string) and empty array [] as equivalent
+        if [ -z "$_entries" ] || [ "$_entries" = "[]" ]; then
+            new_entries="[{\"type\":\"$TYPE\",\"value\":\"$VALUE\"}]"
+        else
+            new_entries=$(echo "$_entries" | sed "s/\]\$/,{\"type\":\"$TYPE\",\"value\":\"$VALUE\"}]/")
+        fi
         cfg_set "wlw_entries" "$new_entries"
         echo "[+] Added $VALUE ($TYPE)"
         logger "wl_window" "Added $VALUE ($TYPE) to wlw_entries"

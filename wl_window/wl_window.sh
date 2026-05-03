@@ -196,7 +196,7 @@ remove_block() {
 
 # ---------------------------------------------------------------------------
 # _days_label DAYS
-# Returns a human-readable string for the day field, e.g. "Monâ€“Fri", "Every day"
+# Returns a human-readable string for the day field, e.g. "Mon", “Fri", "Every day"
 # ---------------------------------------------------------------------------
 _days_label() {
     _df="${1:-*}"
@@ -224,7 +224,7 @@ show_status() {
     _day_field=$(_build_cron_day_field "$DAYS")
     _day_label=$(_days_label "$_day_field")
 
-    echo "=== Whitelist Window â€” Dual-Stack Status ==="
+    echo "=== Whitelist Window - Dual-Stack Status ==="
     echo ""
     echo "Config  : $([ -f "$SETTINGS" ] && echo "$SETTINGS" || echo "built-in defaults")"
     echo "Schedule: ON at ${START_HH}:${START_MM}, OFF at ${END_HH}:${END_MM}, Days: ${_day_label} (cron: ${_day_field})"

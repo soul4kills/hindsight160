@@ -1,11 +1,4 @@
-<img width="1226" height="1269" alt="Screenshot 2026-05-02 205143" src="https://github.com/user-attachments/assets/a883fdd2-1129-4b60-8a21-46ef68adb1f9" />
-
-
-
-
-
-
-
+<img width="1220" height="1282" alt="Screenshot 2026-05-03 075250" src="https://github.com/user-attachments/assets/e6824917-ffde-47b8-98e7-ae154f38af67" />
   
 # Whitelist Window – Internet Block with Whitelist (AsusWRT‑Merlin)
 
